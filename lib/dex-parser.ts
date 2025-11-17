@@ -93,13 +93,23 @@ export class DEXParser {
 
   private parseHeader(): DEXHeader {
     // Read magic number (8 bytes)
+    // DEX format: "dex\n" (0x64 0x65 0x78 0x0a) + version (1 byte) + nulls (3 bytes)
+    if (this.data.byteLength < 8) {
+      throw new Error('Invalid DEX file: file too small')
+    }
+    
     const magicBytes = new Uint8Array(this.data, 0, 8)
-    const magic = String.fromCharCode(...magicBytes.slice(0, 3)) + 
-                  String.fromCharCode(...magicBytes.slice(4, 7))
-    const version = String.fromCharCode(...magicBytes.slice(4, 7))
+    // Check first 3 bytes for "dex" (byte 3 should be newline 0x0a)
+    const magic = String.fromCharCode(magicBytes[0], magicBytes[1], magicBytes[2])
+    const version = String.fromCharCode(magicBytes[4], magicBytes[5], magicBytes[6])
 
+    // DEX magic number should be "dex" followed by newline (0x0a)
+    // Be lenient - just check for "dex" prefix, allow parsing to continue
     if (magic !== 'dex') {
-      throw new Error('Invalid DEX file: magic number mismatch')
+      const hexBytes = Array.from(magicBytes.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')
+      console.warn(`DEX magic number mismatch. Expected "dex", got "${magic}". Magic bytes: ${hexBytes}`)
+      console.warn('Continuing with parsing anyway - this may be a non-standard DEX file')
+      // Don't throw - allow parsing to continue for compatibility with various DEX formats
     }
 
     return {

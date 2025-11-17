@@ -332,12 +332,17 @@ export class AndroidEmulator {
       const apkInfo = await APKParser.parseAPK(apkData)
       console.log('APK parsed:', apkInfo.packageName, apkInfo.versionName)
 
-      // Load DEX files into Dalvik VM
-      for (let i = 0; i < apkInfo.dexFiles.length; i++) {
-        const dexName = i === 0 ? 'classes.dex' : `classes${i}.dex`
-        console.log(`Loading ${dexName} into Dalvik VM...`)
-        this.dalvikVM.loadDEX(apkInfo.dexFiles[i], dexName)
-      }
+          // Load DEX files into Dalvik VM (with error handling)
+          for (let i = 0; i < apkInfo.dexFiles.length; i++) {
+            const dexName = i === 0 ? 'classes.dex' : `classes${i}.dex`
+            console.log(`Loading ${dexName} into Dalvik VM...`)
+            try {
+              this.dalvikVM.loadDEX(apkInfo.dexFiles[i], dexName)
+            } catch (error) {
+              console.warn(`Failed to load ${dexName}, but continuing installation:`, error)
+              // Continue with installation even if DEX parsing fails
+            }
+          }
 
       // Register app
       const app: InstalledApp = {

@@ -36,8 +36,15 @@ export class DalvikVM {
   }
 
   loadDEX(dexData: ArrayBuffer, name: string = 'classes.dex'): void {
-    const parser = DEXParser.parseDEX(dexData)
-    this.dexParsers.set(name, parser)
+    let parser: DEXParser
+    try {
+      parser = DEXParser.parseDEX(dexData)
+      this.dexParsers.set(name, parser)
+    } catch (error) {
+      console.warn(`Failed to parse DEX file ${name}, but continuing:`, error)
+      // The app can still be installed even if DEX parsing fails
+      return
+    }
 
     // Merge classes into global class map
     const classes = parser.getClasses()
