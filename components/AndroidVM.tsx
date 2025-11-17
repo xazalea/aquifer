@@ -42,7 +42,8 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     if (error) {
       setVmState('error')
     }
-  }, [error, setVmState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error])
 
   useEffect(() => {
     if (vm && vmState === 'starting' && isReady) {

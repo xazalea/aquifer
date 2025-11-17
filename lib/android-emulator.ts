@@ -436,13 +436,15 @@ export class AndroidEmulator {
           this.launchApp(app.packageName)
         }
       })
+    }
 
-      // Check home button
-      if (y >= height - 50 && x >= width / 2 - 20 && x <= width / 2 + 20) {
-        if (this.currentScreen === 'app') {
-          this.currentScreen = 'home'
-          this.runningApp = null
-        }
+    // Check home button (works from any screen)
+    const width = this.canvas.width / (window.devicePixelRatio || 1)
+    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    if (y >= height - 50 && x >= width / 2 - 20 && x <= width / 2 + 20) {
+      if (this.currentScreen === 'app') {
+        this.currentScreen = 'home'
+        this.runningApp = null
       }
     }
   }

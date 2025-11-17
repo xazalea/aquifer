@@ -36,7 +36,7 @@ export function Header() {
                 duration={20}
                 delay={10}
                 radius={30}
-                path="reverse"
+                reverse={true}
               >
                 <div className="w-2 h-2 bg-purple-500 rounded-full" />
               </OrbitingCircles>

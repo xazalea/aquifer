@@ -74,7 +74,9 @@ export class APKParser {
       // Limit cache size to prevent memory issues
       if (APKParser.cache.size > 10) {
         const firstKey = APKParser.cache.keys().next().value
-        APKParser.cache.delete(firstKey)
+        if (firstKey) {
+          APKParser.cache.delete(firstKey)
+        }
       }
 
       return apkInfo
@@ -93,7 +95,9 @@ export class APKParser {
       if (!file.dir && filename.endsWith('.dex')) {
         promises.push(
           file.async('arraybuffer')
-            .then(arrayBuffer => dexFiles.push(arrayBuffer))
+            .then(arrayBuffer => {
+              dexFiles.push(arrayBuffer)
+            })
             .catch(e => console.warn('Failed to extract DEX file:', filename, e))
         )
       }
@@ -124,7 +128,9 @@ export class APKParser {
       if (!file.dir && (filename.startsWith('res/') || filename.startsWith('assets/'))) {
         promises.push(
           file.async('arraybuffer')
-            .then(arrayBuffer => resources.set(filename, arrayBuffer))
+            .then(arrayBuffer => {
+              resources.set(filename, arrayBuffer)
+            })
             .catch(e => console.warn('Failed to extract resource:', filename, e))
         )
       }
