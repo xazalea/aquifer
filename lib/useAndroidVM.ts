@@ -65,14 +65,7 @@ export function useAndroidVM() {
       throw new Error(errorMsg)
     }
 
-    // Check file size (limit to 100MB for browser performance)
-    const maxSize = 100 * 1024 * 1024 // 100MB
-    if (file.size > maxSize) {
-      const errorMsg = `File too large. Maximum size is ${maxSize / 1024 / 1024}MB.`
-      setError(errorMsg)
-      throw new Error(errorMsg)
-    }
-
+    // No file size limit - allow any size APK
     setIsInstalling(true)
     setError(null)
 
