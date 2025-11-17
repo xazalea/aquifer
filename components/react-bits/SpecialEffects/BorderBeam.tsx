@@ -1,21 +1,34 @@
-/**
- * BorderBeam - React Bits Component
- * 
- * This is a placeholder. To install:
- * 1. Visit: https://reactbits.dev
- * 2. Search for "BorderBeam"
- * 3. Select "TypeScript + Plain CSS" variant
- * 4. Copy the code and replace this file
- * 
- * Category: SpecialEffects
- * Component: BorderBeam
- */
+'use client'
 
-export function BorderBeam() {
+import { ReactNode } from 'react'
+import styles from './BorderBeam.module.css'
+
+interface BorderBeamProps {
+  children: ReactNode
+  className?: string
+  size?: number
+  duration?: number
+  borderWidth?: number
+}
+
+export function BorderBeam({
+  children,
+  className = '',
+  size = 200,
+  duration = 3,
+  borderWidth = 1.5,
+}: BorderBeamProps) {
   return (
-    <div>
-      {/* Replace with actual component code from reactbits.dev */}
-      <p>BorderBeam - Install from https://reactbits.dev</p>
+    <div
+      className={`${styles.container} ${className}`}
+      style={{
+        '--size': `${size}px`,
+        '--duration': `${duration}s`,
+        '--border-width': `${borderWidth}px`,
+      } as React.CSSProperties}
+    >
+      <div className={styles.beam}></div>
+      <div className={styles.content}>{children}</div>
     </div>
-  );
+  )
 }

@@ -1,21 +1,29 @@
-/**
- * ShimmerButton - React Bits Component
- * 
- * This is a placeholder. To install:
- * 1. Visit: https://reactbits.dev
- * 2. Search for "ShimmerButton"
- * 3. Select "TypeScript + Plain CSS" variant
- * 4. Copy the code and replace this file
- * 
- * Category: Buttons
- * Component: ShimmerButton
- */
+'use client'
 
-export function ShimmerButton() {
+import { ReactNode } from 'react'
+import styles from './ShimmerButton.module.css'
+
+interface ShimmerButtonProps {
+  children: ReactNode
+  onClick?: () => void
+  className?: string
+  disabled?: boolean
+}
+
+export function ShimmerButton({
+  children,
+  onClick,
+  className = '',
+  disabled = false,
+}: ShimmerButtonProps) {
   return (
-    <div>
-      {/* Replace with actual component code from reactbits.dev */}
-      <p>ShimmerButton - Install from https://reactbits.dev</p>
-    </div>
-  );
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`${styles.button} ${className}`}
+    >
+      <span className={styles.shimmer}></span>
+      <span className={styles.content}>{children}</span>
+    </button>
+  )
 }
