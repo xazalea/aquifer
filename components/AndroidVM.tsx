@@ -2,9 +2,6 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
-import { BorderBeam } from '@/components/ui/border-beam'
-import { Particles } from '@/components/ui/particles'
-import { AnimatedGradientText } from '@/components/ui/animated-gradient-text'
 import styles from './AndroidVM.module.css'
 
 interface AndroidVMProps {
@@ -118,18 +115,6 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
 
   return (
     <div className={`${styles.container} relative`} ref={containerRef}>
-      {vmState === 'running' && (
-        <>
-          <BorderBeam size={250} duration={12} delay={9} />
-          <Particles
-            className="absolute inset-0"
-            quantity={50}
-            ease={80}
-            color="#667eea"
-            refresh
-          />
-        </>
-      )}
       <div className={styles.vmWrapper}>
         <canvas
           ref={canvasRef}
@@ -145,9 +130,7 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
         {vmState === 'stopped' && (
           <div className={styles.placeholder}>
             <div className={styles.placeholderContent}>
-              <AnimatedGradientText>
-                <span className="text-4xl font-bold">Android VM</span>
-              </AnimatedGradientText>
+              <h2 className={styles.placeholderTitle}>Android VM</h2>
               <p className={styles.placeholderText}>
                 Click &quot;Start VM&quot; to launch the Android emulator
               </p>

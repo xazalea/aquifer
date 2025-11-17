@@ -30,6 +30,10 @@ export class AndroidEmulator {
   private dalvikVM: DalvikVM
   private currentScreen: 'boot' | 'home' | 'app' = 'boot'
   private runningApp: InstalledApp | null = null
+  private needsRedraw: boolean = true
+  private lastRenderTime: number = 0
+  private targetFPS: number = 30 // Reduced from 60 for better performance on low-end devices
+  private frameInterval: number = 1000 / this.targetFPS
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -43,14 +47,14 @@ export class AndroidEmulator {
   }
 
   private setupCanvas() {
-    // Set up canvas for high DPI displays
-    const dpr = window.devicePixelRatio || 1
+    // Set up canvas - use 1x for better performance on low-end devices
     const rect = this.canvas.getBoundingClientRect()
-    this.canvas.width = rect.width * dpr
-    this.canvas.height = rect.height * dpr
-    this.ctx.scale(dpr, dpr)
+    this.canvas.width = rect.width
+    this.canvas.height = rect.height
     this.canvas.style.width = `${rect.width}px`
     this.canvas.style.height = `${rect.height}px`
+    // Disable image smoothing for better performance
+    this.ctx.imageSmoothingEnabled = false
   }
 
   public start() {
@@ -92,19 +96,19 @@ export class AndroidEmulator {
       
       this.bootProgress = step.progress
       this.renderBootScreen(step.message)
-      await this.delay(400)
+      await this.delay(200) // Faster boot for better UX
     }
 
     if (this.isRunning) {
       this.currentScreen = 'home'
-      this.renderAndroidHome()
+      this.needsRedraw = true
       this.startRenderLoop()
     }
   }
 
   private renderBootScreen(message: string) {
-    const width = this.canvas.width / (window.devicePixelRatio || 1)
-    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    const width = this.canvas.width
+    const height = this.canvas.height
 
     // Clear screen
     this.ctx.fillStyle = '#000000'
@@ -155,10 +159,11 @@ export class AndroidEmulator {
   }
 
   private renderAndroidHome() {
-    const width = this.canvas.width / (window.devicePixelRatio || 1)
-    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    const width = this.canvas.width
+    const height = this.canvas.height
 
-    // Clear screen
+    // Clear screen efficiently
+    this.ctx.clearRect(0, 0, width, height)
     this.ctx.fillStyle = '#1a1a1a'
     this.ctx.fillRect(0, 0, width, height)
 
@@ -255,29 +260,39 @@ export class AndroidEmulator {
   }
 
   private startRenderLoop() {
-    const render = () => {
+    const render = (currentTime: number) => {
       if (!this.isRunning) {
         return
       }
 
-      if (this.currentScreen === 'home') {
-        this.renderAndroidHome()
-      } else if (this.currentScreen === 'app' && this.runningApp) {
-        this.renderAppScreen()
+      // Throttle rendering to target FPS
+      const elapsed = currentTime - this.lastRenderTime
+      if (elapsed >= this.frameInterval || this.needsRedraw) {
+        this.lastRenderTime = currentTime - (elapsed % this.frameInterval)
+        
+        if (this.currentScreen === 'home') {
+          this.renderAndroidHome()
+        } else if (this.currentScreen === 'app' && this.runningApp) {
+          this.renderAppScreen()
+        }
+        
+        this.needsRedraw = false
       }
 
       this.animationFrameId = requestAnimationFrame(render)
     }
 
-    render()
+    this.lastRenderTime = performance.now()
+    this.animationFrameId = requestAnimationFrame(render)
   }
 
   private renderAppScreen() {
-    const width = this.canvas.width / (window.devicePixelRatio || 1)
-    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    const width = this.canvas.width
+    const height = this.canvas.height
 
-    // Clear screen
-    this.ctx.fillStyle = '#ffffff'
+    // Clear screen efficiently
+    this.ctx.clearRect(0, 0, width, height)
+    this.ctx.fillStyle = '#222222'
     this.ctx.fillRect(0, 0, width, height)
 
     // App title bar
@@ -303,8 +318,8 @@ export class AndroidEmulator {
   }
 
   private clearScreen() {
-    const width = this.canvas.width / (window.devicePixelRatio || 1)
-    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    const width = this.canvas.width
+    const height = this.canvas.height
     this.ctx.fillStyle = '#000000'
     this.ctx.fillRect(0, 0, width, height)
   }
@@ -336,11 +351,12 @@ export class AndroidEmulator {
       console.log('APK installed successfully:', apkInfo.packageName)
 
       // Try to launch main activity (simplified)
-      if (this.isRunning && this.currentScreen === 'home') {
-        // In a real implementation, we would parse the manifest to find the main activity
-        // and launch it using the Dalvik VM
-        console.log('App installed. Click the app icon to launch.')
-      }
+        if (this.isRunning && this.currentScreen === 'home') {
+          // In a real implementation, we would parse the manifest to find the main activity
+          // and launch it using the Dalvik VM
+          console.log('App installed. Click the app icon to launch.')
+          this.needsRedraw = true
+        }
     } catch (error) {
       console.error('Failed to install APK:', error)
       throw error
@@ -377,10 +393,9 @@ export class AndroidEmulator {
 
   public handleTouch(x: number, y: number, type: 'start' | 'move' | 'end') {
     // Scale coordinates to match canvas resolution
-    const dpr = window.devicePixelRatio || 1
     const rect = this.canvas.getBoundingClientRect()
-    const scaleX = (this.canvas.width / dpr) / rect.width
-    const scaleY = (this.canvas.height / dpr) / rect.height
+    const scaleX = this.canvas.width / rect.width
+    const scaleY = this.canvas.height / rect.height
 
     const scaledX = x * scaleX
     const scaledY = y * scaleY
@@ -399,8 +414,8 @@ export class AndroidEmulator {
 
     if (this.currentScreen === 'home') {
       // Check if an app icon was clicked
-      const width = this.canvas.width / (window.devicePixelRatio || 1)
-      const height = this.canvas.height / (window.devicePixelRatio || 1)
+      const width = this.canvas.width
+      const height = this.canvas.height
       const iconSize = 60
       const iconSpacing = 80
       const startX = (width - (iconSpacing * 3)) / 2
@@ -439,12 +454,13 @@ export class AndroidEmulator {
     }
 
     // Check home button (works from any screen)
-    const width = this.canvas.width / (window.devicePixelRatio || 1)
-    const height = this.canvas.height / (window.devicePixelRatio || 1)
+    const width = this.canvas.width
+    const height = this.canvas.height
     if (y >= height - 50 && x >= width / 2 - 20 && x <= width / 2 + 20) {
       if (this.currentScreen === 'app') {
         this.currentScreen = 'home'
         this.runningApp = null
+        this.needsRedraw = true
       }
     }
   }
