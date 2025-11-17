@@ -15,6 +15,7 @@ interface AndroidVMProps {
 export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange }: AndroidVMProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const installedApkRef = useRef<string | null>(null) // Track installed APK to prevent re-installation
   const { vm, initVM, startVM, installAPK, isReady, error, isInstalling } = useAndroidVM()
 
   useEffect(() => {
@@ -54,12 +55,40 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     }
   }, [vm, vmState, isReady, startVM, setVmState])
 
+  // Reset installed APK ref when VM stops or APK file is cleared
   useEffect(() => {
+    if (vmState === 'stopped' || !apkFile) {
+      installedApkRef.current = null
+    }
+  }, [vmState, apkFile])
+
+  useEffect(() => {
+    // Only install if:
+    // 1. VM is running
+    // 2. APK file exists
+    // 3. Not currently installing
+    // 4. This APK hasn't been installed yet (check by name + size to handle same file re-uploads)
     if (vm && apkFile && vmState === 'running' && !isInstalling) {
-      installAPK(apkFile).catch((err) => {
-        console.error('APK installation failed:', err)
-        setVmState('error')
-      })
+      const apkKey = `${apkFile.name}-${apkFile.size}`
+      
+      // Skip if this exact APK was already installed
+      if (installedApkRef.current === apkKey) {
+        return
+      }
+
+      // Mark as installing to prevent re-entry
+      installedApkRef.current = apkKey
+      
+      installAPK(apkFile)
+        .then(() => {
+          console.log('APK installed successfully')
+        })
+        .catch((err) => {
+          console.error('APK installation failed:', err)
+          // Reset on error so user can retry
+          installedApkRef.current = null
+          setVmState('error')
+        })
     }
   }, [vm, apkFile, vmState, installAPK, isInstalling])
 
