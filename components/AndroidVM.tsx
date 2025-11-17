@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
 import styles from './AndroidVM.module.css'
 
@@ -8,12 +8,26 @@ interface AndroidVMProps {
   vmState: 'stopped' | 'starting' | 'running' | 'error'
   setVmState: (state: 'stopped' | 'starting' | 'running' | 'error') => void
   apkFile: File | null
+  onError?: (error: string | null) => void
+  onInstallingChange?: (isInstalling: boolean) => void
 }
 
-export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
+export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange }: AndroidVMProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const { vm, initVM, startVM, installAPK, isReady } = useAndroidVM()
+  const { vm, initVM, startVM, installAPK, isReady, error, isInstalling } = useAndroidVM()
+
+  useEffect(() => {
+    if (onError) {
+      onError(error)
+    }
+  }, [error, onError])
+
+  useEffect(() => {
+    if (onInstallingChange) {
+      onInstallingChange(isInstalling)
+    }
+  }, [isInstalling, onInstallingChange])
 
   useEffect(() => {
     if (canvasRef.current && !vm) {
@@ -22,19 +36,33 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
   }, [vm, initVM])
 
   useEffect(() => {
+    if (error) {
+      setVmState('error')
+    }
+  }, [error, setVmState])
+
+  useEffect(() => {
     if (vm && vmState === 'starting' && isReady) {
-      startVM()
-      setVmState('running')
+      try {
+        startVM()
+        setVmState('running')
+      } catch (err) {
+        console.error('Failed to start VM:', err)
+        setVmState('error')
+      }
     }
   }, [vm, vmState, isReady, startVM, setVmState])
 
   useEffect(() => {
-    if (vm && apkFile && vmState === 'running') {
-      installAPK(apkFile)
+    if (vm && apkFile && vmState === 'running' && !isInstalling) {
+      installAPK(apkFile).catch((err) => {
+        console.error('APK installation failed:', err)
+        setVmState('error')
+      })
     }
-  }, [vm, apkFile, vmState, installAPK])
+  }, [vm, apkFile, vmState, installAPK, isInstalling])
 
-  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     if (vm && vmState === 'running') {
       e.preventDefault()
       const touch = e.touches[0]
@@ -45,9 +73,9 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
         vm.handleTouch(x, y, 'start')
       }
     }
-  }
+  }, [vm, vmState])
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     if (vm && vmState === 'running') {
       e.preventDefault()
       const touch = e.touches[0]
@@ -58,16 +86,16 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
         vm.handleTouch(x, y, 'move')
       }
     }
-  }
+  }, [vm, vmState])
 
-  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     if (vm && vmState === 'running') {
       e.preventDefault()
       vm.handleTouch(0, 0, 'end')
     }
-  }
+  }, [vm, vmState])
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (vm && vmState === 'running') {
       const rect = canvasRef.current?.getBoundingClientRect()
       if (rect) {
@@ -76,13 +104,13 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
         vm.handleTouch(x, y, 'start')
       }
     }
-  }
+  }, [vm, vmState])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (vm && vmState === 'running') {
       vm.handleTouch(0, 0, 'end')
     }
-  }
+  }, [vm, vmState])
 
   return (
     <div className={styles.container} ref={containerRef}>
@@ -103,7 +131,7 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
             <div className={styles.placeholderContent}>
               <h2 className={styles.placeholderTitle}>Android VM</h2>
               <p className={styles.placeholderText}>
-                Click "Start VM" to launch the Android emulator
+                Click &quot;Start VM&quot; to launch the Android emulator
               </p>
             </div>
           </div>
@@ -119,7 +147,23 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
         {vmState === 'error' && (
           <div className={styles.placeholder}>
             <div className={styles.placeholderContent}>
-              <p className={styles.errorText}>Error starting VM. Please try again.</p>
+              <p className={styles.errorText}>
+                {error || 'Error starting VM. Please try again.'}
+              </p>
+              <button
+                className={styles.retryButton}
+                onClick={() => setVmState('stopped')}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+        {isInstalling && vmState === 'running' && (
+          <div className={styles.installingOverlay}>
+            <div className={styles.installingContent}>
+              <div className={styles.loader}></div>
+              <p>Installing APK...</p>
             </div>
           </div>
         )}
@@ -127,4 +171,3 @@ export function AndroidVM({ vmState, setVmState, apkFile }: AndroidVMProps) {
     </div>
   )
 }
-

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Play, Square, Upload, Power, File } from 'lucide-react'
+import { Play, Square, Upload, Power, File, AlertCircle } from 'lucide-react'
 import styles from './ControlPanel.module.css'
 
 interface ControlPanelProps {
@@ -9,33 +9,66 @@ interface ControlPanelProps {
   setVmState: (state: 'stopped' | 'starting' | 'running' | 'error') => void
   apkFile: File | null
   setApkFile: (file: File | null) => void
+  error?: string | null
+  isInstalling?: boolean
 }
 
-export function ControlPanel({ vmState, setVmState, apkFile, setApkFile }: ControlPanelProps) {
+export function ControlPanel({ 
+  vmState, 
+  setVmState, 
+  apkFile, 
+  setApkFile,
+  error,
+  isInstalling = false
+}: ControlPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleStart = () => {
     if (vmState === 'stopped' || vmState === 'error') {
+      setUploadError(null)
       setVmState('starting')
     }
   }
 
   const handleStop = () => {
     setVmState('stopped')
+    setApkFile(null)
+    setUploadError(null)
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file && file.name.endsWith('.apk')) {
-      setApkFile(file)
-    } else {
-      alert('Please select a valid APK file')
+    setUploadError(null)
+    
+    if (!file) {
+      return
     }
+
+    if (!file.name.endsWith('.apk')) {
+      setUploadError('Please select a valid APK file')
+      return
+    }
+
+    // Check file size (100MB limit)
+    const maxSize = 100 * 1024 * 1024
+    if (file.size > maxSize) {
+      setUploadError(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB`)
+      return
+    }
+
+    setApkFile(file)
   }
 
   const handleUploadClick = () => {
+    if (vmState !== 'running') {
+      setUploadError('Please start the VM first')
+      return
+    }
     fileInputRef.current?.click()
   }
+
+  const displayError = error || uploadError
 
   return (
     <div className={styles.panel}>
@@ -84,11 +117,11 @@ export function ControlPanel({ vmState, setVmState, apkFile, setApkFile }: Contr
         />
         <button
           onClick={handleUploadClick}
-          disabled={vmState !== 'running'}
+          disabled={vmState !== 'running' || isInstalling}
           className={`${styles.button} ${styles.buttonSecondary}`}
         >
           <File className={styles.buttonIcon} />
-          Select APK
+          {isInstalling ? 'Installing...' : 'Select APK'}
         </button>
         {apkFile && (
           <div className={styles.fileInfo}>
@@ -96,6 +129,12 @@ export function ControlPanel({ vmState, setVmState, apkFile, setApkFile }: Contr
             <p className={styles.fileSize}>
               {(apkFile.size / 1024 / 1024).toFixed(2)} MB
             </p>
+          </div>
+        )}
+        {displayError && (
+          <div className={styles.errorBox}>
+            <AlertCircle className={styles.errorIcon} />
+            <p className={styles.errorText}>{displayError}</p>
           </div>
         )}
       </div>
@@ -115,4 +154,3 @@ export function ControlPanel({ vmState, setVmState, apkFile, setApkFile }: Contr
     </div>
   )
 }
-

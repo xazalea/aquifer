@@ -249,12 +249,21 @@ export class DEXParser {
     let shift = 0
     let bytesRead = 0
 
-    while (true) {
+    // Optimized: check bounds before reading
+    const maxOffset = this.data.byteLength
+    if (offset >= maxOffset) {
+      return { value: 0, bytesRead: 0 }
+    }
+
+    while (offset + bytesRead < maxOffset) {
       const byte = this.view.getUint8(offset + bytesRead)
       bytesRead++
       value |= (byte & 0x7f) << shift
       if ((byte & 0x80) === 0) break
       shift += 7
+      
+      // Safety: prevent infinite loops
+      if (bytesRead > 5) break
     }
 
     return { value, bytesRead }

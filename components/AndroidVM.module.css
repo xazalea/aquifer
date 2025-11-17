@@ -79,3 +79,42 @@
   100% { transform: rotate(360deg); }
 }
 
+.retryButton {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.retryButton:hover {
+  background: #5568d3;
+}
+
+.installingOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.installingContent {
+  text-align: center;
+  color: white;
+}
+
+.installingContent p {
+  margin-top: 1rem;
+  font-size: 1rem;
+}
+

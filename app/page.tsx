@@ -9,6 +9,8 @@ import styles from './page.module.css'
 export default function Home() {
   const [vmState, setVmState] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped')
   const [apkFile, setApkFile] = useState<File | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isInstalling, setIsInstalling] = useState(false)
 
   return (
     <main className={styles.main}>
@@ -19,6 +21,8 @@ export default function Home() {
             vmState={vmState}
             setVmState={setVmState}
             apkFile={apkFile}
+            onError={setError}
+            onInstallingChange={setIsInstalling}
           />
         </div>
         <div className={styles.panelContainer}>
@@ -27,6 +31,8 @@ export default function Home() {
             setVmState={setVmState}
             apkFile={apkFile}
             setApkFile={setApkFile}
+            error={error}
+            isInstalling={isInstalling}
           />
         </div>
       </div>

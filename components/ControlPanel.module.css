@@ -170,3 +170,29 @@
   line-height: 1.5;
 }
 
+.errorBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #2a1a1a;
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+.errorIcon {
+  width: 1rem;
+  height: 1rem;
+  color: #ff4444;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.errorBox .errorText {
+  color: #ff8888;
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.4;
+}
+

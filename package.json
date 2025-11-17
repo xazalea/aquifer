@@ -20,10 +20,9 @@
     "binary-parser": "^2.2.0"
   },
   "devDependencies": {
-    "eslint": "^8.56.0",
+    "eslint": "^8.57.0",
     "eslint-config-next": "14.0.4",
-    "@types/react-dom": "^18.2.18",
-    "@types/jszip": "^3.4.1"
+    "@types/react-dom": "^18.2.18"
   }
 }
 
