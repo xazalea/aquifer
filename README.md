@@ -20,6 +20,20 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Install React Bits Components
+
+To add all React Bits components (110+ animated components) to your project:
+
+```bash
+# Using jsrepo (recommended)
+npm run install-react-bits
+
+# Or using shadcn
+npm run install-react-bits-shadcn
+```
+
+See `REACT_BITS_INSTALLATION.md` for detailed instructions.
+
 ### Production Build
 
 ```bash

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "install-react-bits": "node scripts/install-react-bits.js",
+    "install-react-bits-shadcn": "node scripts/install-react-bits-shadcn.js"
   },
   "dependencies": {
     "react": "^18.2.0",
