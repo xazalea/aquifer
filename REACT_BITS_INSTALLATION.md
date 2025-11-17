@@ -40,9 +40,34 @@ npm run install-react-bits-direct
 
 **Note**: This may not work if React Bits doesn't expose a public API.
 
-### Method 3: Manual Installation (Always Works)
+### Method 3: Browser Helper (Recommended - Easiest!)
 
-Generate a guide with all component links:
+Generate an interactive HTML helper with clickable links:
+
+```bash
+npm run install-react-bits-browser
+```
+
+This creates:
+- **`react-bits-installer.html`** - Interactive browser page with:
+  - Clickable links to all components
+  - Progress tracking (saves to localStorage)
+  - File paths for each component
+  - Checkboxes to track what you've installed
+- **`install-react-bits.sh`** - Shell script to create placeholders
+- **Placeholder component files** in `components/react-bits/`
+
+**How to use:**
+1. Open `react-bits-installer.html` in your browser
+2. Click each component link (opens in new tab)
+3. On React Bits website, select "TypeScript + Plain CSS" variant
+4. Copy the code
+5. Replace the placeholder file in `components/react-bits/<Category>/<Component>.tsx`
+6. Check the checkbox to track progress
+
+### Method 4: Manual Installation Guide
+
+Generate a markdown guide with all component links:
 
 ```bash
 npm run install-react-bits-manual
@@ -52,8 +77,6 @@ This creates `REACT_BITS_MANUAL_INSTALL.md` with:
 - Direct links to each component
 - Copy-paste ready commands
 - Step-by-step instructions
-
-Then visit https://reactbits.dev and copy components manually.
 
 ### ❌ Method 4: shadcn (Won't Work)
 

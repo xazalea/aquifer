@@ -9,7 +9,8 @@
     "lint": "next lint",
     "install-react-bits": "node scripts/install-react-bits.js",
     "install-react-bits-direct": "node scripts/install-react-bits-direct.js",
-    "install-react-bits-manual": "node scripts/install-react-bits-manual.js"
+    "install-react-bits-manual": "node scripts/install-react-bits-manual.js",
+    "install-react-bits-browser": "node scripts/install-react-bits-browser.js"
   },
   "dependencies": {
     "react": "^18.2.0",

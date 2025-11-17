@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>React Bits Component Installer Helper</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #0a0a0a;
+      color: #fff;
+    }
+    .component {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+    }
+    .component h3 {
+      margin: 0 0 10px 0;
+      color: #667eea;
+    }
+    .links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .link {
+      background: #667eea;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .link:hover {
+      background: #5568d3;
+    }
+    .category {
+      margin: 30px 0;
+      border-top: 2px solid #333;
+      padding-top: 20px;
+    }
+    .category h2 {
+      color: #3DDC84;
+    }
+    .progress {
+      background: #2a2a2a;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+    .progress-bar {
+      background: #3DDC84;
+      height: 8px;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 React Bits Component Installer</h1>
+  <p>Click each component link, copy the code, and save to the specified location.</p>
+  
+  <div class="progress">
+    <div>Progress: <span id="progress">0</span> / <span id="total">0</span></div>
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <script>
+    const total = 65;
+    let completed = 0;
+    const checkboxes = {};
+    
+    function updateProgress() {
+      completed = Object.values(checkboxes).filter(v => v).length;
+      document.getElementById('progress').textContent = completed;
+      document.getElementById('total').textContent = total;
+      const percent = (completed / total) * 100;
+      document.getElementById('progressBar').style.width = percent + '%';
+    }
+    
+    function toggleComponent(category, name) {
+      const key = category + '/' + name;
+      checkboxes[key] = !checkboxes[key];
+      updateProgress();
+      localStorage.setItem('reactBitsProgress', JSON.stringify(checkboxes));
+    }
+    
+    // Load saved progress
+    const saved = localStorage.getItem('reactBitsProgress');
+    if (saved) {
+      Object.assign(checkboxes, JSON.parse(saved));
+      updateProgress();
+      // Restore checkbox states
+      Object.keys(checkboxes).forEach(key => {
+        if (checkboxes[key]) {
+          const [cat, name] = key.split('/');
+          const checkbox = document.querySelector(`input[onchange*="'${name}'"]`);
+          if (checkbox) checkbox.checked = true;
+        }
+      });
+    }
+  </script>
+  <div class="category">
+    <h2>TextAnimations</h2>
+    <div class="component">
+      <h3>SplitText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/splittext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'SplitText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/SplitText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>TextAnimate</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/textanimate" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'TextAnimate')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/TextAnimate.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>LineShadowText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/lineshadowtext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'LineShadowText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/LineShadowText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AuroraText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/auroratext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'AuroraText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/AuroraText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>NumberTicker</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/numberticker" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'NumberTicker')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/NumberTicker.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedShinyText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/animatedshinytext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'AnimatedShinyText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/AnimatedShinyText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedGradientText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/animatedgradienttext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'AnimatedGradientText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/AnimatedGradientText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>TextReveal</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/textreveal" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'TextReveal')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/TextReveal.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>HyperText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/hypertext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'HyperText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/HyperText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>WordRotate</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/wordrotate" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'WordRotate')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/WordRotate.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>TypingAnimation</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/typinganimation" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'TypingAnimation')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/TypingAnimation.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ScrollBasedVelocity</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/scrollbasedvelocity" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'ScrollBasedVelocity')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/ScrollBasedVelocity.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>FlipText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/fliptext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'FlipText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/FlipText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>BoxReveal</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/boxreveal" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'BoxReveal')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/BoxReveal.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>SparklesText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/sparklestext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'SparklesText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/SparklesText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>MorphingText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/morphingtext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'MorphingText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/MorphingText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>SpinningText</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/textanimations/spinningtext" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('TextAnimations', 'SpinningText')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/TextAnimations/SpinningText.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>Buttons</h2>
+    <div class="component">
+      <h3>RainbowButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/rainbowbutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'RainbowButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/RainbowButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ShimmerButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/shimmerbutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'ShimmerButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/ShimmerButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ShinyButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/shinybutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'ShinyButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/ShinyButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>InteractiveHoverButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/interactivehoverbutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'InteractiveHoverButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/InteractiveHoverButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedSubscribeButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/animatedsubscribebutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'AnimatedSubscribeButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/AnimatedSubscribeButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>PulsatingButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/pulsatingbutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'PulsatingButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/PulsatingButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>RippleButton</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/buttons/ripplebutton" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Buttons', 'RippleButton')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Buttons/RippleButton.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>Backgrounds</h2>
+    <div class="component">
+      <h3>WarpBackground</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/warpbackground" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'WarpBackground')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/WarpBackground.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>FlickeringGrid</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/flickeringgrid" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'FlickeringGrid')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/FlickeringGrid.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedGridPattern</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/animatedgridpattern" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'AnimatedGridPattern')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/AnimatedGridPattern.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>RetroGrid</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/retrogrid" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'RetroGrid')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/RetroGrid.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Ripple</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/ripple" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'Ripple')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/Ripple.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>DotPattern</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/dotpattern" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'DotPattern')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/DotPattern.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>GridPattern</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/gridpattern" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'GridPattern')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/GridPattern.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>InteractiveGridPattern</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/backgrounds/interactivegridpattern" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Backgrounds', 'InteractiveGridPattern')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Backgrounds/InteractiveGridPattern.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>UIComponents</h2>
+    <div class="component">
+      <h3>Marquee</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/marquee" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Marquee')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Marquee.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Terminal</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/terminal" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Terminal')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Terminal.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>HeroVideoDialog</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/herovideodialog" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'HeroVideoDialog')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/HeroVideoDialog.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>BentoGrid</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/bentogrid" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'BentoGrid')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/BentoGrid.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedList</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/animatedlist" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'AnimatedList')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/AnimatedList.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Dock</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/dock" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Dock')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Dock.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Globe</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/globe" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Globe')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Globe.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>TweetCard</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/tweetcard" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'TweetCard')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/TweetCard.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ClientTweetCard</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/clienttweetcard" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'ClientTweetCard')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/ClientTweetCard.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>OrbitingCircles</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/orbitingcircles" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'OrbitingCircles')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/OrbitingCircles.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AvatarCircles</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/avatarcircles" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'AvatarCircles')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/AvatarCircles.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>IconCloud</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/iconcloud" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'IconCloud')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/IconCloud.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>AnimatedCircularProgressBar</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/animatedcircularprogressbar" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'AnimatedCircularProgressBar')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/AnimatedCircularProgressBar.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>FileTree</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/filetree" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'FileTree')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/FileTree.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>CodeComparison</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/codecomparison" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'CodeComparison')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/CodeComparison.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ScriptCopyBtn</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/scriptcopybtn" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'ScriptCopyBtn')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/ScriptCopyBtn.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ScrollProgress</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/scrollprogress" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'ScrollProgress')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/ScrollProgress.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Lens</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/lens" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Lens')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Lens.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Pointer</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/uicomponents/pointer" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('UIComponents', 'Pointer')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/UIComponents/Pointer.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>SpecialEffects</h2>
+    <div class="component">
+      <h3>AnimatedBeam</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/animatedbeam" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'AnimatedBeam')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/AnimatedBeam.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>BorderBeam</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/borderbeam" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'BorderBeam')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/BorderBeam.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ShineBorder</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/shineborder" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'ShineBorder')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/ShineBorder.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>MagicCard</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/magiccard" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'MagicCard')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/MagicCard.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Meteors</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/meteors" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'Meteors')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/Meteors.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>NeonGradientCard</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/neongradientcard" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'NeonGradientCard')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/NeonGradientCard.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Confetti</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/confetti" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'Confetti')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/Confetti.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Particles</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/particles" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'Particles')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/Particles.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>CoolMode</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/coolmode" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'CoolMode')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/CoolMode.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>ScratchToReveal</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/specialeffects/scratchtoreveal" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('SpecialEffects', 'ScratchToReveal')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/SpecialEffects/ScratchToReveal.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>Animations</h2>
+    <div class="component">
+      <h3>BlurFade</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/animations/blurfade" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('Animations', 'BlurFade')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/Animations/BlurFade.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+  <div class="category">
+    <h2>DeviceMocks</h2>
+    <div class="component">
+      <h3>Safari</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/devicemocks/safari" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('DeviceMocks', 'Safari')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/DeviceMocks/Safari.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Iphone15Pro</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/devicemocks/iphone15pro" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('DeviceMocks', 'Iphone15Pro')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/DeviceMocks/Iphone15Pro.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+    <div class="component">
+      <h3>Android</h3>
+      <div class="links">
+        <a href="https://reactbits.dev/devicemocks/android" target="_blank" class="link">📦 View Component</a>
+        <label style="cursor: pointer; color: #888;">
+          <input type="checkbox" onchange="toggleComponent('DeviceMocks', 'Android')">
+          Installed
+        </label>
+      </div>
+      <p style="color: #888; font-size: 0.9em; margin: 10px 0 0 0;">
+        Save to: <code>components/react-bits/DeviceMocks/Android.tsx</code><br>
+        Variant: <strong>TypeScript + Plain CSS</strong>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
