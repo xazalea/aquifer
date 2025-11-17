@@ -2,17 +2,22 @@
 
 This guide explains how to install ALL React Bits components into the Aquifer project.
 
+## ⚠️ Important Note
+
+**This project uses CSS Modules (not Tailwind CSS)**, which means:
+- ❌ `shadcn` CLI won't work (requires Tailwind CSS)
+- ✅ `jsrepo` CLI should work (try it first)
+- ✅ Manual installation always works (copy from website)
+
 ## Overview
 
-React Bits provides over 110 animated and interactive React components. This project includes scripts to install all of them automatically.
+React Bits provides over 110 animated and interactive React components. This project includes multiple methods to install them.
 
 ## Installation Methods
 
-We support two installation methods:
+### Method 1: jsrepo (Recommended - Try This First)
 
-### Method 1: jsrepo (Recommended)
-
-Uses the `jsrepo` CLI tool:
+Uses the `jsrepo` CLI tool (doesn't require Tailwind):
 
 ```bash
 npm run install-react-bits
@@ -23,18 +28,38 @@ Or directly:
 node scripts/install-react-bits.js
 ```
 
-### Method 2: shadcn
+**Note**: If this fails, try Method 3 (Manual Installation).
 
-Uses the `shadcn` CLI tool:
+### Method 2: Direct Fetch (Experimental)
+
+Attempts to directly fetch components from React Bits:
 
 ```bash
-npm run install-react-bits-shadcn
+npm run install-react-bits-direct
 ```
 
-Or directly:
+**Note**: This may not work if React Bits doesn't expose a public API.
+
+### Method 3: Manual Installation (Always Works)
+
+Generate a guide with all component links:
+
 ```bash
-node scripts/install-react-bits-shadcn.js
+npm run install-react-bits-manual
 ```
+
+This creates `REACT_BITS_MANUAL_INSTALL.md` with:
+- Direct links to each component
+- Copy-paste ready commands
+- Step-by-step instructions
+
+Then visit https://reactbits.dev and copy components manually.
+
+### ❌ Method 4: shadcn (Won't Work)
+
+**This method requires Tailwind CSS and will fail** because this project uses CSS Modules instead.
+
+If you see errors like "No Tailwind CSS configuration found", use Method 1 or Method 3 instead.
 
 ## Component Categories
 

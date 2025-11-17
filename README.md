@@ -25,14 +25,19 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 To add all React Bits components (110+ animated components) to your project:
 
 ```bash
-# Using jsrepo (recommended)
+# Method 1: Using jsrepo (recommended - try this first)
 npm run install-react-bits
 
-# Or using shadcn
-npm run install-react-bits-shadcn
+# Method 2: Generate manual installation guide
+npm run install-react-bits-manual
+
+# Method 3: Direct fetch (experimental)
+npm run install-react-bits-direct
 ```
 
-See `REACT_BITS_INSTALLATION.md` for detailed instructions.
+**Note**: This project uses CSS Modules (not Tailwind), so `shadcn` method won't work. Use `jsrepo` or manual installation instead.
+
+See `REACT_BITS_INSTALLATION.md` for detailed instructions and troubleshooting.
 
 ### Production Build
 
