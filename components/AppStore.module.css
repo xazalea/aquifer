@@ -1,0 +1,162 @@
+.store {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.searchBox {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.searchInput {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+}
+
+.searchButton {
+  min-width: 40px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: hsl(var(--primary));
+}
+
+.appsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.appsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.appCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.3);
+  transition: all 0.2s;
+}
+
+.appCard:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.appIcon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--primary) / 0.1);
+  border-radius: 8px;
+  color: hsl(var(--primary));
+}
+
+.appInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.appName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.appPackage {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+  font-family: monospace;
+}
+
+.appVersion {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+.appDescription {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0.5rem 0 0 0;
+  line-height: 1.4;
+}
+
+.appSize {
+  font-size: 0.8rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+
+.downloadButton {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.emptyMessage {
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  padding: 2rem;
+  font-size: 0.9rem;
+}
+
+.infoSection {
+  padding: 1rem;
+  background: hsl(var(--muted) / 0.3);
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border));
+}
+
+.infoText {
+  font-size: 0.85rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+  margin: 0;
+}
+

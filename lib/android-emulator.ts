@@ -11,6 +11,7 @@
 
 import { APKParser, APKInfo } from './apk-parser'
 import { DalvikVM } from './dalvik-vm'
+import { PerformanceMonitor } from './performance-monitor'
 
 export interface InstalledApp {
   packageName: string
@@ -34,6 +35,7 @@ export class AndroidEmulator {
   private lastRenderTime: number = 0
   private targetFPS: number = 30 // Reduced from 60 for better performance on low-end devices
   private frameInterval: number = 1000 / this.targetFPS
+  private performanceMonitor: PerformanceMonitor
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -43,6 +45,7 @@ export class AndroidEmulator {
     }
     this.ctx = context
     this.dalvikVM = new DalvikVM()
+    this.performanceMonitor = new PerformanceMonitor()
     this.setupCanvas()
   }
 
@@ -268,12 +271,22 @@ export class AndroidEmulator {
       // Throttle rendering to target FPS
       const elapsed = currentTime - this.lastRenderTime
       if (elapsed >= this.frameInterval || this.needsRedraw) {
+        const renderStart = performance.now()
         this.lastRenderTime = currentTime - (elapsed % this.frameInterval)
         
         if (this.currentScreen === 'home') {
           this.renderAndroidHome()
         } else if (this.currentScreen === 'app' && this.runningApp) {
           this.renderAppScreen()
+        }
+        
+        const renderTime = performance.now() - renderStart
+        this.performanceMonitor.recordFrame(renderTime)
+        
+        // Auto-adjust FPS if performance is degraded
+        if (this.performanceMonitor.isPerformanceDegraded()) {
+          this.targetFPS = Math.max(15, this.targetFPS - 5) // Reduce FPS but don't go below 15
+          this.frameInterval = 1000 / this.targetFPS
         }
         
         this.needsRedraw = false
@@ -472,6 +485,50 @@ export class AndroidEmulator {
 
   public getInstalledApps(): InstalledApp[] {
     return Array.from(this.installedApps.values())
+  }
+
+  /**
+   * Get performance metrics
+   */
+  public getPerformanceMetrics() {
+    return this.performanceMonitor.getMetrics()
+  }
+
+  /**
+   * Get performance recommendations
+   */
+  public getPerformanceRecommendations(): string[] {
+    return this.performanceMonitor.getRecommendations()
+  }
+
+  /**
+   * Uninstall an app
+   */
+  public uninstallApp(packageName: string): boolean {
+    if (this.installedApps.has(packageName)) {
+      this.installedApps.delete(packageName)
+      if (this.runningApp?.packageName === packageName) {
+        this.runningApp = null
+        this.currentScreen = 'home'
+        this.needsRedraw = true
+      }
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Get app info
+   */
+  public getAppInfo(packageName: string): InstalledApp | null {
+    return this.installedApps.get(packageName) || null
+  }
+
+  /**
+   * Get currently running app
+   */
+  public getRunningApp(): InstalledApp | null {
+    return this.runningApp
   }
 
   public getDalvikVM(): DalvikVM {

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Play, Square, Upload, Power, File, AlertCircle } from 'lucide-react'
+import { Play, Square, Upload, Power, File, AlertCircle, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AppManager } from '@/components/AppManager'
+import { InstalledApp } from '@/lib/android-emulator'
 import styles from './ControlPanel.module.css'
 
 interface ControlPanelProps {
@@ -12,6 +14,10 @@ interface ControlPanelProps {
   setApkFile: (file: File | null) => void
   error?: string | null
   isInstalling?: boolean
+  installedApps?: InstalledApp[]
+  onLaunchApp?: (packageName: string) => void
+  onUninstallApp?: (packageName: string) => void
+  runningAppPackage?: string | null
 }
 
 export function ControlPanel({ 
@@ -20,7 +26,11 @@ export function ControlPanel({
   apkFile, 
   setApkFile,
   error,
-  isInstalling = false
+  isInstalling = false,
+  installedApps = [],
+  onLaunchApp,
+  onUninstallApp,
+  runningAppPackage = null
 }: ControlPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -134,6 +144,17 @@ export function ControlPanel({
           </div>
         )}
       </div>
+
+      {vmState === 'running' && installedApps.length > 0 && (
+        <div className={styles.section}>
+          <AppManager
+            installedApps={installedApps}
+            onLaunchApp={onLaunchApp || (() => {})}
+            onUninstallApp={onUninstallApp || (() => {})}
+            runningAppPackage={runningAppPackage}
+          />
+        </div>
+      )}
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Information</h3>
