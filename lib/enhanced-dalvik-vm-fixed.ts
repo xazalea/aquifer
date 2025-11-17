@@ -1,0 +1,479 @@
+/**
+ * Enhanced Dalvik VM - More complete bytecode execution
+ * 
+ * Extends the basic Dalvik VM with more opcodes and better execution
+ */
+
+import { DEXParser, DEXClass, DEXMethod, DEXCode } from './dex-parser'
+
+export interface VMThread {
+  id: number
+  pc: number
+  registers: any[]
+  stack: any[]
+  currentMethod: DEXMethod | null
+  currentClass: DEXClass | null
+}
+
+export class EnhancedDalvikVM {
+  private dexParsers: Map<string, DEXParser> = new Map()
+  private classes: Map<string, DEXClass> = new Map()
+  private threads: Map<number, VMThread> = new Map()
+  private nextThreadId: number = 1
+
+  loadDEX(dexData: ArrayBuffer, name: string = 'classes.dex'): void {
+    try {
+      const parser = DEXParser.parseDEX(dexData)
+      this.dexParsers.set(name, parser)
+      
+      const classes = parser.getClasses()
+      for (const [className, dexClass] of classes.entries()) {
+        this.classes.set(className, dexClass)
+      }
+    } catch (error) {
+      console.warn(`Failed to parse DEX file ${name}:`, error)
+    }
+  }
+
+  findClass(className: string): DEXClass | null {
+    return this.classes.get(className) || null
+  }
+
+  createThread(): number {
+    const threadId = this.nextThreadId++
+    const thread: VMThread = {
+      id: threadId,
+      pc: 0,
+      registers: [],
+      stack: [],
+      currentMethod: null,
+      currentClass: null,
+    }
+    this.threads.set(threadId, thread)
+    return threadId
+  }
+
+  invokeMethod(threadId: number, className: string, methodName: string, descriptor: string, args: any[]): any {
+    const thread = this.threads.get(threadId)
+    if (!thread) {
+      throw new Error(`Thread not found: ${threadId}`)
+    }
+
+    const klass = this.findClass(className)
+    if (!klass) {
+      console.warn(`Class not found: ${className}, creating stub`)
+      return null
+    }
+
+    const method = klass.methods.find(m => m.name === methodName && m.descriptor === descriptor)
+    if (!method) {
+      console.warn(`Method not found: ${className}.${methodName}${descriptor}`)
+      return null
+    }
+
+    thread.currentMethod = method
+    thread.currentClass = klass
+    thread.registers = new Array(method.code?.registersSize || 16)
+    thread.pc = 0
+
+    // Copy arguments to registers
+    for (let i = 0; i < args.length && i < thread.registers.length; i++) {
+      thread.registers[i] = args[i]
+    }
+
+    if (method.code && method.code.insns) {
+      return this.executeBytecode(thread, method.code)
+    }
+
+    return null
+  }
+
+  private executeBytecode(thread: VMThread, code: DEXCode): any {
+    const insns = code.insns
+    let pc = 0
+    const maxIterations = 100000 // Prevent infinite loops
+    let iterations = 0
+
+    while (pc < insns.length && iterations < maxIterations) {
+      iterations++
+      const opcode = insns[pc] & 0xff
+      const instruction = insns[pc] >> 8
+
+      switch (opcode) {
+        case 0x00: // nop
+          pc++
+          break
+
+        case 0x01: // move
+        case 0x02: // move/from16
+        case 0x03: // move/16
+          {
+            const vx = (instruction >> 8) & 0xf
+            const vy = instruction & 0xf
+            thread.registers[vx] = thread.registers[vy]
+            pc++
+          }
+          break
+
+        case 0x04: // move-wide
+          {
+            const vxw = (instruction >> 8) & 0xf
+            const vyw = instruction & 0xf
+            thread.registers[vxw] = thread.registers[vyw]
+            thread.registers[vxw + 1] = thread.registers[vyw + 1]
+            pc++
+          }
+          break
+
+        case 0x0a: // move-result
+          {
+            const vresult = (instruction >> 8) & 0xf
+            thread.registers[vresult] = 0
+            pc++
+          }
+          break
+
+        case 0x0b: // move-result-wide
+          {
+            const vresultw = (instruction >> 8) & 0xf
+            thread.registers[vresultw] = 0
+            thread.registers[vresultw + 1] = 0
+            pc++
+          }
+          break
+
+        case 0x0c: // move-result-object
+          {
+            const vresulto = (instruction >> 8) & 0xf
+            thread.registers[vresulto] = null
+            pc++
+          }
+          break
+
+        case 0x0e: // return-void
+          return undefined
+
+        case 0x0f: // return
+          {
+            const returnReg = instruction & 0xf
+            return thread.registers[returnReg]
+          }
+
+        case 0x10: // return-wide
+          {
+            const returnRegW = instruction & 0xf
+            return thread.registers[returnRegW]
+          }
+
+        case 0x11: // return-object
+          {
+            const returnRegO = instruction & 0xf
+            return thread.registers[returnRegO]
+          }
+
+        case 0x1a: // const/4
+          {
+            const constReg = (instruction >> 8) & 0xf
+            let constValue = (instruction & 0xf)
+            if (constValue & 0x8) {
+              constValue |= 0xFFFFFFF0 // Sign extend
+            }
+            thread.registers[constReg] = constValue
+            pc++
+          }
+          break
+
+        case 0x1b: // const/16
+          {
+            const constReg16 = (instruction >> 8) & 0xf
+            const constValue16 = (insns[pc + 1] & 0xff) | ((insns[pc + 1] >> 8) & 0xff) << 8
+            let signedValue16 = constValue16
+            if (signedValue16 & 0x8000) {
+              signedValue16 |= 0xFFFF0000 // Sign extend
+            }
+            thread.registers[constReg16] = signedValue16
+            pc += 2
+          }
+          break
+
+        case 0x1c: // const
+          {
+            const constReg32 = (instruction >> 8) & 0xf
+            const constValue32 = insns[pc + 1] | (insns[pc + 2] << 16)
+            thread.registers[constReg32] = constValue32
+            pc += 3
+          }
+          break
+
+        case 0x1d: // const/high16
+          {
+            const constRegH = (instruction >> 8) & 0xf
+            const constValueH = (insns[pc + 1] & 0xffff) << 16
+            thread.registers[constRegH] = constValueH
+            pc += 2
+          }
+          break
+
+        case 0x1e: // const-wide/16
+        case 0x1f: // const-wide/32
+        case 0x20: // const-wide
+        case 0x21: // const-wide/high16
+          {
+            const wideReg = (instruction >> 8) & 0xf
+            thread.registers[wideReg] = 0
+            thread.registers[wideReg + 1] = 0
+            pc += opcode === 0x1e ? 2 : opcode === 0x1f ? 3 : opcode === 0x20 ? 5 : 2
+          }
+          break
+
+        case 0x1f: // const-string
+        case 0x1a: // const-string/jumbo
+          {
+            const stringReg = (instruction >> 8) & 0xf
+            thread.registers[stringReg] = ''
+            pc += opcode === 0x1a ? 3 : 2
+          }
+          break
+
+        case 0x1c: // const-class
+          {
+            const classReg = (instruction >> 8) & 0xf
+            thread.registers[classReg] = null
+            pc += 2
+          }
+          break
+
+        // Arithmetic operations
+        case 0x90: // add-int
+          {
+            const addReg = (instruction >> 8) & 0xf
+            const addVx = (instruction >> 12) & 0xf
+            const addVy = instruction & 0xf
+            thread.registers[addReg] = (thread.registers[addVx] || 0) + (thread.registers[addVy] || 0)
+            pc++
+          }
+          break
+
+        case 0x91: // sub-int
+          {
+            const subReg = (instruction >> 8) & 0xf
+            const subVx = (instruction >> 12) & 0xf
+            const subVy = instruction & 0xf
+            thread.registers[subReg] = (thread.registers[subVx] || 0) - (thread.registers[subVy] || 0)
+            pc++
+          }
+          break
+
+        case 0x92: // mul-int
+          {
+            const mulReg = (instruction >> 8) & 0xf
+            const mulVx = (instruction >> 12) & 0xf
+            const mulVy = instruction & 0xf
+            thread.registers[mulReg] = (thread.registers[mulVx] || 0) * (thread.registers[mulVy] || 0)
+            pc++
+          }
+          break
+
+        case 0x93: // div-int
+          {
+            const divReg = (instruction >> 8) & 0xf
+            const divVx = (instruction >> 12) & 0xf
+            const divVy = instruction & 0xf
+            const divisor = thread.registers[divVy] || 0
+            thread.registers[divReg] = divisor !== 0 ? Math.floor((thread.registers[divVx] || 0) / divisor) : 0
+            pc++
+          }
+          break
+
+        // Comparison operations
+        case 0x32: // if-eq
+        case 0x33: // if-ne
+        case 0x34: // if-lt
+        case 0x35: // if-ge
+        case 0x36: // if-gt
+        case 0x37: // if-le
+          {
+            const cmpVx = (instruction >> 8) & 0xf
+            const cmpVy = instruction & 0xf
+            const target = (insns[pc + 1] & 0xff) | ((insns[pc + 1] >> 8) & 0xff) << 8
+            let shouldJump = false
+            const vx = thread.registers[cmpVx] || 0
+            const vy = thread.registers[cmpVy] || 0
+
+            switch (opcode) {
+              case 0x32: shouldJump = vx === vy; break
+              case 0x33: shouldJump = vx !== vy; break
+              case 0x34: shouldJump = vx < vy; break
+              case 0x35: shouldJump = vx >= vy; break
+              case 0x36: shouldJump = vx > vy; break
+              case 0x37: shouldJump = vx <= vy; break
+            }
+
+            if (shouldJump) {
+              pc += target
+            } else {
+              pc += 2
+            }
+          }
+          break
+
+        // Method invocation
+        case 0x6e: // invoke-virtual
+        case 0x6f: // invoke-super
+        case 0x70: // invoke-direct
+        case 0x71: // invoke-static
+        case 0x72: // invoke-interface
+          pc += 3
+          break
+
+        case 0x74: // invoke-virtual/range
+        case 0x75: // invoke-super/range
+        case 0x76: // invoke-direct/range
+        case 0x77: // invoke-static/range
+        case 0x78: // invoke-interface/range
+          pc += 3
+          break
+
+        // Field operations
+        case 0x52: // iget
+        case 0x53: // iget-wide
+        case 0x54: // iget-object
+        case 0x55: // iget-boolean
+        case 0x56: // iget-byte
+        case 0x57: // iget-char
+        case 0x58: // iget-short
+          {
+            const getReg = (instruction >> 8) & 0xf
+            thread.registers[getReg] = 0
+            pc += 2
+          }
+          break
+
+        case 0x59: // iput
+        case 0x5a: // iput-wide
+        case 0x5b: // iput-object
+        case 0x5c: // iput-boolean
+        case 0x5d: // iput-byte
+        case 0x5e: // iput-char
+        case 0x5f: // iput-short
+          pc += 2
+          break
+
+        // Array operations
+        case 0x23: // new-array
+          {
+            const arrayReg = (instruction >> 8) & 0xf
+            const sizeReg = instruction & 0xf
+            const size = thread.registers[sizeReg] || 0
+            thread.registers[arrayReg] = new Array(size)
+            pc += 2
+          }
+          break
+
+        case 0x44: // aget
+        case 0x45: // aget-wide
+        case 0x46: // aget-object
+        case 0x47: // aget-boolean
+        case 0x48: // aget-byte
+        case 0x49: // aget-char
+        case 0x4a: // aget-short
+          {
+            const agetReg = (instruction >> 8) & 0xf
+            const arrayRegA = (instruction >> 12) & 0xf
+            const indexReg = instruction & 0xf
+            const array = thread.registers[arrayRegA]
+            const index = thread.registers[indexReg] || 0
+            thread.registers[agetReg] = (array && Array.isArray(array) && index >= 0 && index < array.length) ? array[index] : 0
+            pc++
+          }
+          break
+
+        case 0x4b: // aput
+        case 0x4c: // aput-wide
+        case 0x4d: // aput-object
+        case 0x4e: // aput-boolean
+        case 0x4f: // aput-byte
+        case 0x50: // aput-char
+        case 0x51: // aput-short
+          {
+            const aputReg = (instruction >> 8) & 0xf
+            const arrayRegP = (instruction >> 12) & 0xf
+            const indexRegP = instruction & 0xf
+            const arrayP = thread.registers[arrayRegP]
+            const indexP = thread.registers[indexRegP] || 0
+            const value = thread.registers[aputReg]
+            if (arrayP && Array.isArray(arrayP) && indexP >= 0 && indexP < arrayP.length) {
+              arrayP[indexP] = value
+            }
+            pc++
+          }
+          break
+
+        // Object operations
+        case 0x22: // new-instance
+          {
+            const newReg = (instruction >> 8) & 0xf
+            thread.registers[newReg] = {}
+            pc += 2
+          }
+          break
+
+        case 0x27: // throw
+          {
+            const throwReg = instruction & 0xf
+            const exception = thread.registers[throwReg]
+            console.error('Exception thrown:', exception)
+            throw new Error('VM Exception: ' + (exception || 'Unknown'))
+          }
+
+        case 0x28: // goto
+          {
+            const gotoOffset = (insns[pc + 1] & 0xff) | ((insns[pc + 1] >> 8) & 0xff) << 8
+            let signedOffset = gotoOffset
+            if (signedOffset & 0x8000) {
+              signedOffset |= 0xFFFF0000 // Sign extend
+            }
+            pc += signedOffset
+          }
+          break
+
+        case 0x29: // goto/16
+          {
+            const gotoOffset16 = (insns[pc + 1] & 0xffff) | ((insns[pc + 2] & 0xffff) << 16)
+            let signedOffset16 = gotoOffset16
+            if (signedOffset16 & 0x80000000) {
+              signedOffset16 = -((~signedOffset16 + 1) & 0xFFFFFFFF) // Sign extend
+            }
+            pc += signedOffset16
+          }
+          break
+
+        case 0x2a: // goto/32
+          {
+            const gotoOffset32 = insns[pc + 1] | (insns[pc + 2] << 16) | (insns[pc + 3] << 32) | (insns[pc + 4] << 48)
+            pc += gotoOffset32
+          }
+          break
+
+        default:
+          // Unknown opcode - log and skip
+          console.warn(`Unknown opcode: 0x${opcode.toString(16)} at PC ${pc}`)
+          pc++
+          break
+      }
+
+      if (pc >= insns.length) break
+    }
+
+    if (iterations >= maxIterations) {
+      console.warn('Bytecode execution hit iteration limit')
+    }
+
+    return undefined
+  }
+
+  getLoadedClasses(): string[] {
+    return Array.from(this.classes.keys())
+  }
+}
+

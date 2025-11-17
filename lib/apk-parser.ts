@@ -22,6 +22,7 @@ export interface APKInfo {
   applicationLabel: string
   dexFiles: ArrayBuffer[]
   resources: Map<string, ArrayBuffer>
+  nativeLibraries: Map<string, ArrayBuffer>
   manifest: string
 }
 
@@ -44,11 +45,12 @@ export class APKParser {
 
       const zip = await JSZip.loadAsync(this.apkData)
       
-      // Extract DEX files and manifest in parallel for better performance
-      const [dexFiles, manifest, resources] = await Promise.all([
+      // Extract DEX files, manifest, resources, and native libraries in parallel
+      const [dexFiles, manifest, resources, nativeLibraries] = await Promise.all([
         this.extractDEXFiles(zip),
         this.extractManifest(zip),
         this.extractResources(zip),
+        this.extractNativeLibraries(zip),
       ])
 
       // Parse manifest for basic info (simplified - real parsing requires binary XML parser)
@@ -88,6 +90,7 @@ export class APKParser {
         applicationLabel: applicationLabel || 'Unknown App',
         dexFiles,
         resources,
+        nativeLibraries,
         manifest,
       }
 
@@ -159,7 +162,7 @@ export class APKParser {
 
     for (const filename in zip.files) {
       const file = zip.files[filename]
-      if (!file.dir && (filename.startsWith('res/') || filename.startsWith('assets/'))) {
+      if (!file.dir && (filename.startsWith('res/') || filename.startsWith('assets/') || filename.endsWith('.so'))) {
         promises.push(
           file.async('arraybuffer')
             .then(arrayBuffer => {
@@ -172,6 +175,37 @@ export class APKParser {
 
     await Promise.all(promises)
     return resources
+  }
+
+  /**
+   * Extract native libraries (.so files) from APK
+   */
+  async extractNativeLibraries(zip: JSZip): Promise<Map<string, ArrayBuffer>> {
+    const libraries = new Map<string, ArrayBuffer>()
+    const promises: Promise<void>[] = []
+
+    // Check common library directories
+    const libDirs = ['lib/armeabi-v7a/', 'lib/arm64-v8a/', 'lib/x86/', 'lib/x86_64/', 'lib/armeabi/']
+    
+    for (const libDir of libDirs) {
+      for (const filename in zip.files) {
+        const file = zip.files[filename]
+        if (!file.dir && filename.startsWith(libDir) && filename.endsWith('.so')) {
+          promises.push(
+            file.async('arraybuffer')
+              .then(arrayBuffer => {
+                const libName = filename.substring(filename.lastIndexOf('/') + 1)
+                libraries.set(libName, arrayBuffer)
+                console.log('Found native library:', libName, 'Size:', arrayBuffer.byteLength)
+              })
+              .catch(e => console.warn('Failed to extract native library:', filename, e))
+          )
+        }
+      }
+    }
+
+    await Promise.all(promises)
+    return libraries
   }
 
   private async getCacheKey(): Promise<string> {

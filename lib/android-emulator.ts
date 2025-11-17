@@ -11,8 +11,12 @@
 
 import { APKParser, APKInfo } from './apk-parser'
 import { DalvikVM } from './dalvik-vm'
+import { EnhancedDalvikVM } from './enhanced-dalvik-vm'
 import { PerformanceMonitor } from './performance-monitor'
 import { AndroidViewSystem } from './android-view-system'
+import { GameEngine } from './game-engine'
+import { ARMEmulator } from './arm-emulator'
+import { OpenGLESWebGL } from './opengl-es-webgl'
 
 export interface InstalledApp {
   packageName: string
@@ -38,6 +42,11 @@ export class AndroidEmulator {
   private frameInterval: number = 1000 / this.targetFPS
   private performanceMonitor: PerformanceMonitor
   private viewSystem: AndroidViewSystem
+  private gameEngine: GameEngine
+  private armEmulator: ARMEmulator
+  private openglES: OpenGLESWebGL
+  private enhancedVM: EnhancedDalvikVM
+  private isGame: boolean = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -47,9 +56,16 @@ export class AndroidEmulator {
     }
     this.ctx = context
     this.dalvikVM = new DalvikVM()
+    this.enhancedVM = new EnhancedDalvikVM()
     this.performanceMonitor = new PerformanceMonitor()
     this.viewSystem = new AndroidViewSystem(canvas)
+    this.openglES = new OpenGLESWebGL(canvas)
+    this.gameEngine = new GameEngine(canvas, this.openglES)
+    this.armEmulator = new ARMEmulator()
     this.setupCanvas()
+    
+    // Initialize ARM emulator
+    this.armEmulator.init().catch(console.error)
   }
 
   private setupCanvas() {
@@ -80,6 +96,13 @@ export class AndroidEmulator {
       cancelAnimationFrame(this.animationFrameId)
       this.animationFrameId = null
     }
+    
+    // Stop game engine if running
+    if (this.isGame) {
+      this.gameEngine.stopGame()
+      this.isGame = false
+    }
+    
     this.clearScreen()
     this.currentScreen = 'boot'
     this.runningApp = null
@@ -303,10 +326,7 @@ export class AndroidEmulator {
   }
 
   private renderAppScreen() {
-    // Use Android View System to render the actual app UI
-    if (this.runningApp) {
-      this.viewSystem.render()
-    } else {
+    if (!this.runningApp) {
       // Fallback if no app is running
       const width = this.canvas.width
       const height = this.canvas.height
@@ -317,6 +337,17 @@ export class AndroidEmulator {
       this.ctx.font = '16px sans-serif'
       this.ctx.textAlign = 'center'
       this.ctx.fillText('No app running', width / 2, height / 2)
+      return
+    }
+
+    // Render based on app type
+    if (this.isGame) {
+      // Game engine handles its own rendering
+      // The game loop is running independently
+      return
+    } else {
+      // Use Android View System to render the actual app UI
+      this.viewSystem.render()
     }
   }
 
@@ -335,15 +366,33 @@ export class AndroidEmulator {
       const apkInfo = await APKParser.parseAPK(apkData, fileName)
       console.log('APK parsed:', apkInfo.packageName, apkInfo.versionName, apkInfo.applicationLabel)
 
-          // Load DEX files into Dalvik VM (with error handling)
+          // Load DEX files into both VMs (with error handling)
           for (let i = 0; i < apkInfo.dexFiles.length; i++) {
             const dexName = i === 0 ? 'classes.dex' : `classes${i}.dex`
             console.log(`Loading ${dexName} into Dalvik VM...`)
             try {
               this.dalvikVM.loadDEX(apkInfo.dexFiles[i], dexName)
+              this.enhancedVM.loadDEX(apkInfo.dexFiles[i], dexName)
             } catch (error) {
               console.warn(`Failed to load ${dexName}, but continuing installation:`, error)
               // Continue with installation even if DEX parsing fails
+            }
+          }
+
+          // Extract and load native libraries (.so files) if present
+          if (apkInfo.nativeLibraries.size > 0) {
+            console.log(`Found ${apkInfo.nativeLibraries.size} native libraries`)
+            for (const [libName, libData] of apkInfo.nativeLibraries.entries()) {
+              try {
+                if (this.armEmulator.isAvailable()) {
+                  const address = await this.armEmulator.loadLibrary(libData, libName)
+                  console.log(`Loaded native library ${libName} at address 0x${address.toString(16)}`)
+                } else {
+                  console.warn(`ARM emulator not available, cannot load ${libName}`)
+                }
+              } catch (error) {
+                console.warn(`Failed to load native library ${libName}:`, error)
+              }
             }
           }
 
@@ -381,41 +430,123 @@ export class AndroidEmulator {
     this.runningApp = app
     this.currentScreen = 'app'
 
-    // Create activity with Android View System
+    // Detect if this is a game (simplified heuristic)
+    this.isGame = this.detectGame(app)
+
     try {
-      // Try to find main activity from manifest (simplified - use default for now)
-      const mainActivity = `${app.packageName}.MainActivity`
-      
-      // Create activity with view system
-      const activity = this.viewSystem.createActivity(
-        app.packageName,
-        mainActivity,
-        app.label || app.packageName
-      )
-      
-      // Set as current activity
-      this.viewSystem.setCurrentActivity(app.packageName, mainActivity)
-      
-      // Try to invoke main activity lifecycle
-      try {
-        const threadId = this.dalvikVM.createThread()
-        console.log('Launching app:', packageName, 'Activity:', mainActivity)
-        
-        // Simulate onCreate, onStart, onResume
-        // In a real implementation, we would call these methods on the Activity class
-        console.log('Activity lifecycle: onCreate() -> onStart() -> onResume()')
-        
-        // Render the activity
-        this.viewSystem.render()
-        this.needsRedraw = true
-      } catch (error) {
-        console.warn('Failed to execute activity lifecycle, using view system only:', error)
-        // Still render the UI even if lifecycle fails
-        this.viewSystem.render()
-        this.needsRedraw = true
+      if (this.isGame) {
+        // Launch as game - use game engine
+        console.log('Launching game:', packageName)
+        this.launchGame(app)
+      } else {
+        // Launch as regular app - use view system
+        console.log('Launching app:', packageName)
+        this.launchRegularApp(app)
       }
     } catch (error) {
       console.error('Failed to launch app:', error)
+    }
+  }
+
+  private detectGame(app: InstalledApp): boolean {
+    // Simple heuristic: check if app has native libraries or game-related keywords
+    const gameKeywords = ['game', 'play', 'gaming', 'unity', 'unreal', 'cocos']
+    const label = app.label.toLowerCase()
+    const packageName = app.packageName.toLowerCase()
+    
+    // Check for game keywords
+    for (const keyword of gameKeywords) {
+      if (label.includes(keyword) || packageName.includes(keyword)) {
+        return true
+      }
+    }
+    
+    // Check if app has native libraries (indicates game engine)
+    // In a real implementation, we'd check the APK for .so files
+    return false
+  }
+
+  private launchGame(app: InstalledApp): void {
+    // Start game engine
+    this.gameEngine.startGame(app.packageName, app.apkInfo.dexFiles)
+    
+    // Try to load native libraries if ARM emulator is available
+    if (this.armEmulator.isAvailable()) {
+      // Load native libraries from APK
+      // In a real implementation, extract .so files and load them
+      console.log('Loading native libraries for game...')
+    }
+    
+    // Execute game's main class using enhanced VM
+    try {
+      const threadId = this.enhancedVM.createThread()
+      const mainClass = `${app.packageName}.MainActivity`
+      
+      // Try to find and execute onCreate
+      const klass = this.enhancedVM.findClass(mainClass)
+      if (klass) {
+        console.log('Found game main class, executing with enhanced VM...')
+        // Execute onCreate, onStart, onResume
+        try {
+          this.enhancedVM.invokeMethod(threadId, mainClass, 'onCreate', '(Landroid/os/Bundle;)V', [null])
+          this.enhancedVM.invokeMethod(threadId, mainClass, 'onStart', '()V', [])
+          this.enhancedVM.invokeMethod(threadId, mainClass, 'onResume', '()V', [])
+        } catch (error) {
+          console.warn('Enhanced VM execution failed, trying basic VM:', error)
+          // Fallback to basic VM
+          const basicThreadId = this.dalvikVM.createThread()
+          this.dalvikVM.invokeMethod(basicThreadId, mainClass, 'onCreate', '(Landroid/os/Bundle;)V', [null])
+        }
+      } else {
+        console.warn('Main class not found, game will run with limited functionality')
+      }
+    } catch (error) {
+      console.warn('Failed to execute game code, using game engine only:', error)
+    }
+
+    // Set up OpenGL ES for game rendering
+    try {
+      const gl = this.openglES.getContext()
+      gl.clearColor(0.0, 0.0, 0.0, 1.0)
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+      console.log('OpenGL ES context ready for game rendering')
+    } catch (error) {
+      console.warn('Failed to initialize OpenGL ES:', error)
+    }
+    
+    this.needsRedraw = true
+  }
+
+  private launchRegularApp(app: InstalledApp): void {
+    // Try to find main activity from manifest (simplified - use default for now)
+    const mainActivity = `${app.packageName}.MainActivity`
+    
+    // Create activity with view system
+    const activity = this.viewSystem.createActivity(
+      app.packageName,
+      mainActivity,
+      app.label || app.packageName
+    )
+    
+    // Set as current activity
+    this.viewSystem.setCurrentActivity(app.packageName, mainActivity)
+    
+    // Try to invoke main activity lifecycle
+    try {
+      const threadId = this.dalvikVM.createThread()
+      console.log('Launching app:', app.packageName, 'Activity:', mainActivity)
+      
+      // Simulate onCreate, onStart, onResume
+      console.log('Activity lifecycle: onCreate() -> onStart() -> onResume()')
+      
+      // Render the activity
+      this.viewSystem.render()
+      this.needsRedraw = true
+    } catch (error) {
+      console.warn('Failed to execute activity lifecycle, using view system only:', error)
+      // Still render the UI even if lifecycle fails
+      this.viewSystem.render()
+      this.needsRedraw = true
     }
   }
 
