@@ -12,6 +12,7 @@
 import { APKParser, APKInfo } from './apk-parser'
 import { DalvikVM } from './dalvik-vm'
 import { PerformanceMonitor } from './performance-monitor'
+import { AndroidViewSystem } from './android-view-system'
 
 export interface InstalledApp {
   packageName: string
@@ -36,6 +37,7 @@ export class AndroidEmulator {
   private targetFPS: number = 30 // Reduced from 60 for better performance on low-end devices
   private frameInterval: number = 1000 / this.targetFPS
   private performanceMonitor: PerformanceMonitor
+  private viewSystem: AndroidViewSystem
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -46,6 +48,7 @@ export class AndroidEmulator {
     this.ctx = context
     this.dalvikVM = new DalvikVM()
     this.performanceMonitor = new PerformanceMonitor()
+    this.viewSystem = new AndroidViewSystem(canvas)
     this.setupCanvas()
   }
 
@@ -300,34 +303,21 @@ export class AndroidEmulator {
   }
 
   private renderAppScreen() {
-    const width = this.canvas.width
-    const height = this.canvas.height
-
-    // Clear screen efficiently
-    this.ctx.clearRect(0, 0, width, height)
-    this.ctx.fillStyle = '#222222'
-    this.ctx.fillRect(0, 0, width, height)
-
-    // App title bar
-    this.ctx.fillStyle = '#2196F3'
-    this.ctx.fillRect(0, 0, width, 50)
-
-    // App name
-    this.ctx.fillStyle = '#FFFFFF'
-    this.ctx.font = '16px sans-serif'
-    this.ctx.textAlign = 'left'
-    this.ctx.fillText(this.runningApp?.label || 'App', 10, 30)
-
-    // App content area
-    this.ctx.fillStyle = '#f5f5f5'
-    this.ctx.fillRect(0, 50, width, height - 50)
-
-    // App content
-    this.ctx.fillStyle = '#333333'
-    this.ctx.font = '14px sans-serif'
-    this.ctx.textAlign = 'center'
-    this.ctx.fillText('App is running', width / 2, height / 2)
-    this.ctx.fillText(`Package: ${this.runningApp?.packageName}`, width / 2, height / 2 + 30)
+    // Use Android View System to render the actual app UI
+    if (this.runningApp) {
+      this.viewSystem.render()
+    } else {
+      // Fallback if no app is running
+      const width = this.canvas.width
+      const height = this.canvas.height
+      this.ctx.clearRect(0, 0, width, height)
+      this.ctx.fillStyle = '#F5F5F5'
+      this.ctx.fillRect(0, 0, width, height)
+      this.ctx.fillStyle = '#333333'
+      this.ctx.font = '16px sans-serif'
+      this.ctx.textAlign = 'center'
+      this.ctx.fillText('No app running', width / 2, height / 2)
+    }
   }
 
   private clearScreen() {
@@ -391,19 +381,39 @@ export class AndroidEmulator {
     this.runningApp = app
     this.currentScreen = 'app'
 
-    // Try to invoke main activity (simplified)
+    // Create activity with Android View System
     try {
-      // In a real implementation, we would:
-      // 1. Parse AndroidManifest.xml to find the main activity
-      // 2. Load the activity class
-      // 3. Create an instance
-      // 4. Call onCreate(), onStart(), onResume()
+      // Try to find main activity from manifest (simplified - use default for now)
+      const mainActivity = `${app.packageName}.MainActivity`
       
-      const threadId = this.dalvikVM.createThread()
-      console.log('Launching app:', packageName)
+      // Create activity with view system
+      const activity = this.viewSystem.createActivity(
+        app.packageName,
+        mainActivity,
+        app.label || app.packageName
+      )
       
-      // This is a simplified launch - real implementation would be more complex
-      console.log('App launched (simulated)')
+      // Set as current activity
+      this.viewSystem.setCurrentActivity(app.packageName, mainActivity)
+      
+      // Try to invoke main activity lifecycle
+      try {
+        const threadId = this.dalvikVM.createThread()
+        console.log('Launching app:', packageName, 'Activity:', mainActivity)
+        
+        // Simulate onCreate, onStart, onResume
+        // In a real implementation, we would call these methods on the Activity class
+        console.log('Activity lifecycle: onCreate() -> onStart() -> onResume()')
+        
+        // Render the activity
+        this.viewSystem.render()
+        this.needsRedraw = true
+      } catch (error) {
+        console.warn('Failed to execute activity lifecycle, using view system only:', error)
+        // Still render the UI even if lifecycle fails
+        this.viewSystem.render()
+        this.needsRedraw = true
+      }
     } catch (error) {
       console.error('Failed to launch app:', error)
     }
@@ -418,6 +428,14 @@ export class AndroidEmulator {
     const scaledX = x * scaleX
     const scaledY = y * scaleY
 
+    // If app is running, use view system for touch handling
+    if (this.currentScreen === 'app' && this.runningApp) {
+      this.viewSystem.handleTouch(scaledX, scaledY, type)
+      this.needsRedraw = true
+      return
+    }
+
+    // Otherwise use default touch handling for home screen
     if (type === 'start') {
       this.handleTouchStart(scaledX, scaledY)
     } else if (type === 'move') {
@@ -471,16 +489,17 @@ export class AndroidEmulator {
       })
     }
 
-    // Check home button (works from any screen)
-    const width = this.canvas.width
-    const height = this.canvas.height
-    if (y >= height - 50 && x >= width / 2 - 20 && x <= width / 2 + 20) {
-      if (this.currentScreen === 'app') {
-        this.currentScreen = 'home'
-        this.runningApp = null
-        this.needsRedraw = true
-      }
-    }
+        // Check home button (works from any screen)
+        const width = this.canvas.width
+        const height = this.canvas.height
+        if (y >= height - 50 && x >= width / 2 - 20 && x <= width / 2 + 20) {
+          if (this.currentScreen === 'app') {
+            this.currentScreen = 'home'
+            this.runningApp = null
+            this.viewSystem.setCurrentActivity('', '') // Clear current activity
+            this.needsRedraw = true
+          }
+        }
   }
 
   public getInstalledApps(): InstalledApp[] {
