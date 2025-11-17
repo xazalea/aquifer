@@ -4,9 +4,11 @@ import { AndroidVM } from '@/components/AndroidVM'
 import { Header } from '@/components/Header'
 import { ControlPanel } from '@/components/ControlPanel'
 import { AppStore } from '@/components/AppStore'
-import { useState, useRef } from 'react'
+import { PWAInstaller } from '@/components/PWAInstaller'
+import { useState, useRef, useEffect } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { appStorage } from '@/lib/app-storage'
 import styles from './page.module.css'
 
 export default function Home() {
@@ -16,6 +18,11 @@ export default function Home() {
   const [isInstalling, setIsInstalling] = useState(false)
   const [activeTab, setActiveTab] = useState<'controls' | 'store'>('controls')
   const { installAPK, vm, installedApps } = useAndroidVM()
+
+  // Initialize app storage
+  useEffect(() => {
+    appStorage.init().catch(console.error)
+  }, [])
 
   const handleInstallFromStore = async (apkData: ArrayBuffer) => {
     try {
@@ -88,6 +95,7 @@ export default function Home() {
           </Tabs>
         </div>
       </div>
+      <PWAInstaller />
     </main>
   )
 }

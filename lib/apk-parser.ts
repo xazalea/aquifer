@@ -33,7 +33,7 @@ export class APKParser {
     this.apkData = apkData
   }
 
-  async parse(): Promise<APKInfo> {
+  async parse(fileName?: string): Promise<APKInfo> {
     try {
       // Create cache key from first 1KB of APK (for quick identification)
       const cacheKey = await this.getCacheKey()
@@ -52,9 +52,32 @@ export class APKParser {
       ])
 
       // Parse manifest for basic info (simplified - real parsing requires binary XML parser)
-      const packageName = this.extractPackageName(manifest)
-      const versionCode = this.extractVersionCode(manifest)
-      const versionName = this.extractVersionName(manifest)
+      let packageName = this.extractPackageName(manifest)
+      let versionCode = this.extractVersionCode(manifest)
+      let versionName = this.extractVersionName(manifest)
+      let applicationLabel = this.extractApplicationLabel(manifest, resources)
+
+      // If manifest parsing failed (binary XML), try to extract from DEX files or use fallbacks
+      if (!packageName && dexFiles.length > 0) {
+        // Try to extract package name from DEX file (simplified - just use a hash of first DEX)
+        const firstDex = new Uint8Array(dexFiles[0].slice(0, 100))
+        const hash = Array.from(firstDex.slice(0, 8))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
+        packageName = `app.${hash.substring(0, 12)}`
+        console.log('Using fallback package name from DEX hash')
+      }
+
+      // Use filename as app label if we can't extract it
+      if (!applicationLabel) {
+        if (fileName) {
+          // Try to extract app name from filename (remove .apk extension and format)
+          const nameWithoutExt = fileName.replace(/\.apk$/i, '')
+          applicationLabel = this.formatFileName(nameWithoutExt)
+        } else {
+          applicationLabel = packageName ? this.formatPackageName(packageName) : 'Unknown App'
+        }
+      }
 
       const apkInfo: APKInfo = {
         packageName: packageName || 'unknown',
@@ -62,7 +85,7 @@ export class APKParser {
         versionName: versionName || '1.0',
         minSdkVersion: 21, // Default
         targetSdkVersion: 33, // Default
-        applicationLabel: packageName || 'Unknown App',
+        applicationLabel: applicationLabel || 'Unknown App',
         dexFiles,
         resources,
         manifest,
@@ -111,9 +134,20 @@ export class APKParser {
     const manifestFile = zip.files['AndroidManifest.xml']
     if (manifestFile) {
       try {
-        return await manifestFile.async('string')
+        // Try to read as string first (for uncompressed manifests)
+        const text = await manifestFile.async('string')
+        // Check if it's actually readable XML (not binary)
+        if (text.includes('<?xml') || text.includes('<manifest')) {
+          return text
+        }
+        // If it's binary XML, we can't parse it directly without a binary XML parser
+        // Return empty string and we'll use fallback methods
+        console.warn('AndroidManifest.xml is in binary format, using fallback parsing')
+        return ''
       } catch (e) {
-        console.warn('Failed to extract manifest:', e)
+        // If string conversion fails, it's likely binary XML
+        console.warn('AndroidManifest.xml appears to be binary format:', e)
+        return ''
       }
     }
     return ''
@@ -169,9 +203,58 @@ export class APKParser {
     return match ? match[1] : null
   }
 
-  static async parseAPK(apkData: ArrayBuffer): Promise<APKInfo> {
+  private extractApplicationLabel(manifest: string, resources: Map<string, ArrayBuffer>): string | null {
+    if (!manifest) return null
+    
+    // Try to extract android:label from manifest
+    // Pattern: android:label="@string/app_name" or android:label="App Name"
+    const labelMatch = manifest.match(/android:label=["']([^"']+)["']/)
+    if (labelMatch) {
+      const label = labelMatch[1]
+      // If it's a resource reference (@string/app_name), try to resolve it
+      if (label.startsWith('@string/')) {
+        const stringName = label.replace('@string/', '')
+        // Try to find in resources (simplified - would need proper resource parsing)
+        // For now, format the string name nicely
+        return this.formatStringName(stringName)
+      }
+      // If it's a direct string, return it
+      return label
+    }
+    return null
+  }
+
+  private formatPackageName(packageName: string): string {
+    // Convert package name like "com.example.app" to "App"
+    const parts = packageName.split('.')
+    const lastPart = parts[parts.length - 1]
+    // Capitalize first letter
+    return lastPart.charAt(0).toUpperCase() + lastPart.slice(1)
+  }
+
+  private formatStringName(stringName: string): string {
+    // Convert "app_name" to "App Name"
+    return stringName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
+  private formatFileName(fileName: string): string {
+    // Convert filename like "my-awesome-app" or "MyAwesomeApp" to "My Awesome App"
+    // Remove special characters and split by dashes/underscores/camelCase
+    return fileName
+      .replace(/[-_]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+      .trim() || 'Unknown App'
+  }
+
+  static async parseAPK(apkData: ArrayBuffer, fileName?: string): Promise<APKInfo> {
     const parser = new APKParser(apkData)
-    return parser.parse()
+    return parser.parse(fileName)
   }
 
   static clearCache(): void {

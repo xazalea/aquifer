@@ -337,13 +337,13 @@ export class AndroidEmulator {
     this.ctx.fillRect(0, 0, width, height)
   }
 
-  public async installAPK(apkData: ArrayBuffer): Promise<void> {
+  public async installAPK(apkData: ArrayBuffer, fileName?: string): Promise<void> {
     try {
       console.log('Parsing APK...')
       
       // Parse APK file
-      const apkInfo = await APKParser.parseAPK(apkData)
-      console.log('APK parsed:', apkInfo.packageName, apkInfo.versionName)
+      const apkInfo = await APKParser.parseAPK(apkData, fileName)
+      console.log('APK parsed:', apkInfo.packageName, apkInfo.versionName, apkInfo.applicationLabel)
 
           // Load DEX files into Dalvik VM (with error handling)
           for (let i = 0; i < apkInfo.dexFiles.length; i++) {

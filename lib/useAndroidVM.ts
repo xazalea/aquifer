@@ -71,7 +71,7 @@ export function useAndroidVM() {
 
     try {
       const arrayBuffer = await file.arrayBuffer()
-      await vm.emulator.installAPK(arrayBuffer)
+      await vm.emulator.installAPK(arrayBuffer, file.name)
       console.log('APK installed successfully')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to install APK'

@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Play, Square, Upload, Power, File, AlertCircle, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppManager } from '@/components/AppManager'
+import { StorageManager } from '@/components/StorageManager'
 import { InstalledApp } from '@/lib/android-emulator'
 import styles from './ControlPanel.module.css'
 
@@ -157,14 +158,19 @@ export function ControlPanel({
       )}
 
       <div className={styles.section}>
+        <StorageManager />
+      </div>
+
+      <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Information</h3>
         <div className={styles.info}>
           <p className={styles.infoText}>
             Aquifer runs Android OS directly in your browser using WebAssembly
-            and JavaScript emulation.
+            and JavaScript emulation. Install as a PWA for offline access.
           </p>
           <p className={styles.infoText}>
             Start the VM, then upload and install APK files to run Android apps.
+            Apps are stored locally for faster loading.
           </p>
         </div>
       </div>
