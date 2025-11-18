@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { AndroidEmulator } from './android-emulator'
+import { HybridEmulator, EmulationMode } from './hybrid-emulator'
 
 interface VMInstance {
   canvas: HTMLCanvasElement

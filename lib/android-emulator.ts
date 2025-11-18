@@ -507,9 +507,13 @@ export class AndroidEmulator {
     // Set up OpenGL ES for game rendering
     try {
       const gl = this.openglES.getContext()
-      gl.clearColor(0.0, 0.0, 0.0, 1.0)
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-      console.log('OpenGL ES context ready for game rendering')
+      if (gl) {
+        gl.clearColor(0.0, 0.0, 0.0, 1.0)
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+        console.log('OpenGL ES context ready for game rendering')
+      } else {
+        console.warn('WebGL not available, games will use 2D canvas rendering')
+      }
     } catch (error) {
       console.warn('Failed to initialize OpenGL ES:', error)
     }

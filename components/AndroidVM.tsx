@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
+import { EmuHubVNCViewer } from './EmuHubVNCViewer'
+import { EmulationMode } from './EmulationModeSelector'
+import { HybridEmulator } from '@/lib/hybrid-emulator'
 import styles from './AndroidVM.module.css'
 
 interface AndroidVMProps {
@@ -10,12 +13,15 @@ interface AndroidVMProps {
   apkFile: File | null
   onError?: (error: string | null) => void
   onInstallingChange?: (isInstalling: boolean) => void
+  emulationMode?: EmulationMode
 }
 
-export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange }: AndroidVMProps) {
+export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange, emulationMode = 'auto' }: AndroidVMProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const installedApkRef = useRef<string | null>(null) // Track installed APK to prevent re-installation
+  const hybridEmulatorRef = useRef<HybridEmulator | null>(null)
+  const [vncUrl, setVncUrl] = useState<string | null>(null)
   const { vm, initVM, startVM, installAPK, isReady, error, isInstalling } = useAndroidVM()
 
   useEffect(() => {
@@ -30,11 +36,27 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     }
   }, [isInstalling, onInstallingChange])
 
+  // Initialize hybrid emulator for WebVM + EmuHub mode
   useEffect(() => {
-    if (canvasRef.current && !vm) {
+    if (emulationMode === 'webvm-emuhub' && canvasRef.current && !hybridEmulatorRef.current) {
+      const hybrid = new HybridEmulator(canvasRef.current, { mode: 'webvm-emuhub' })
+      hybridEmulatorRef.current = hybrid
+      hybrid.init().then((success) => {
+        if (success) {
+          const vnc = hybrid.getVNCUrl()
+          setVncUrl(vnc)
+          console.log('WebVM + EmuHub initialized, VNC URL:', vnc)
+        }
+      }).catch(console.error)
+    }
+  }, [emulationMode])
+
+  // Initialize browser VM for browser mode
+  useEffect(() => {
+    if (emulationMode === 'browser' && canvasRef.current && !vm) {
       initVM(canvasRef.current)
     }
-  }, [vm, initVM])
+  }, [vm, initVM, emulationMode])
 
   useEffect(() => {
     if (error) {
@@ -142,20 +164,31 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     }
   }, [vm, vmState])
 
+  // Show VNC viewer for WebVM + EmuHub mode
+  if (emulationMode === 'webvm-emuhub' && vncUrl) {
+    return (
+      <div className={`${styles.container} relative`} ref={containerRef}>
+        <div className={styles.vmWrapper}>
+          <EmuHubVNCViewer vncUrl={vncUrl} width={800} height={600} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`${styles.container} relative`} ref={containerRef}>
-      <div className={styles.vmWrapper}>
-        <canvas
-          ref={canvasRef}
-          className={styles.canvas}
-          width={800}
-          height={600}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-        />
+          <div className={styles.vmWrapper}>
+            <canvas
+              ref={canvasRef}
+              className={styles.canvas}
+              width={800}
+              height={600}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+            />
         {vmState === 'stopped' && (
           <div className={styles.placeholder}>
             <div className={styles.placeholderContent}>

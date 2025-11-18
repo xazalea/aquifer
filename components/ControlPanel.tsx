@@ -5,6 +5,7 @@ import { Play, Square, Upload, Power, File, AlertCircle, Package } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { AppManager } from '@/components/AppManager'
 import { StorageManager } from '@/components/StorageManager'
+import { EmulationModeSelector, EmulationMode } from '@/components/EmulationModeSelector'
 import { InstalledApp } from '@/lib/android-emulator'
 import styles from './ControlPanel.module.css'
 
@@ -19,20 +20,24 @@ interface ControlPanelProps {
   onLaunchApp?: (packageName: string) => void
   onUninstallApp?: (packageName: string) => void
   runningAppPackage?: string | null
+  emulationMode?: EmulationMode
+  onEmulationModeChange?: (mode: EmulationMode) => void
 }
 
 export function ControlPanel({ 
-  vmState, 
-  setVmState, 
-  apkFile, 
-  setApkFile,
-  error,
-  isInstalling = false,
-  installedApps = [],
-  onLaunchApp,
-  onUninstallApp,
-  runningAppPackage = null
-}: ControlPanelProps) {
+      vmState, 
+      setVmState, 
+      apkFile, 
+      setApkFile,
+      error,
+      isInstalling = false,
+      installedApps = [],
+      onLaunchApp,
+      onUninstallApp,
+      runningAppPackage = null,
+      emulationMode = 'auto',
+      onEmulationModeChange
+    }: ControlPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
@@ -157,12 +162,21 @@ export function ControlPanel({
         </div>
       )}
 
-      <div className={styles.section}>
-        <StorageManager />
-      </div>
+          <div className={styles.section}>
+            <StorageManager />
+          </div>
 
-      <div className={styles.section}>
-        <h3 className={styles.sectionTitle}>Information</h3>
+          {onEmulationModeChange && (
+            <div className={styles.section}>
+              <EmulationModeSelector
+                currentMode={emulationMode}
+                onModeChange={onEmulationModeChange}
+              />
+            </div>
+          )}
+
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Information</h3>
         <div className={styles.info}>
           <p className={styles.infoText}>
             Aquifer runs Android OS directly in your browser using WebAssembly

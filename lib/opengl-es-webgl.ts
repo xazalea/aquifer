@@ -41,7 +41,11 @@ export class OpenGLESWebGL {
       return
     }
 
-    throw new Error('WebGL not supported')
+    // WebGL not available - log warning but don't throw
+    // The system will fall back to 2D canvas rendering
+    console.warn('WebGL not supported in this browser. Graphics will be limited to 2D canvas rendering.')
+    this.gl = null
+    this.isWebGL2 = false
   }
 
   private setupConstants(): void {
@@ -84,11 +88,15 @@ export class OpenGLESWebGL {
   /**
    * Get WebGL context
    */
-  getContext(): WebGLRenderingContext | WebGL2RenderingContext {
-    if (!this.gl) {
-      throw new Error('WebGL context not initialized')
-    }
+  getContext(): WebGLRenderingContext | WebGL2RenderingContext | null {
     return this.gl
+  }
+
+  /**
+   * Check if WebGL is available
+   */
+  isAvailable(): boolean {
+    return this.gl !== null
   }
 
   /**
@@ -204,7 +212,14 @@ export class OpenGLESWebGL {
    * Clear (OpenGL ES glClear)
    */
   clear(mask: number): void {
-    if (!this.gl) return
+    if (!this.gl) {
+      // Fallback to 2D canvas clear
+      const ctx = this.canvas.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+      }
+      return
+    }
     let webglMask = 0
     if (mask & 0x1E00) webglMask |= this.gl.DEPTH_BUFFER_BIT
     if (mask & 0x00004000) webglMask |= this.gl.COLOR_BUFFER_BIT

@@ -17,6 +17,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
   const [activeTab, setActiveTab] = useState<'controls' | 'store'>('controls')
+  const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('auto')
   const { installAPK, vm, installedApps } = useAndroidVM()
 
   // Initialize app storage
@@ -48,44 +49,47 @@ export default function Home() {
     <main className={`${styles.main} relative min-h-screen`}>
       <Header />
       <div className={styles.content}>
-        <div className={styles.vmContainer}>
-          <AndroidVM 
-            vmState={vmState}
-            setVmState={setVmState}
-            apkFile={apkFile}
-            onError={setError}
-            onInstallingChange={setIsInstalling}
-          />
-        </div>
+            <div className={styles.vmContainer}>
+              <AndroidVM 
+                vmState={vmState}
+                setVmState={setVmState}
+                apkFile={apkFile}
+                onError={setError}
+                onInstallingChange={setIsInstalling}
+                emulationMode={emulationMode}
+              />
+            </div>
         <div className={styles.panelContainer}>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'controls' | 'store')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="controls">Controls</TabsTrigger>
               <TabsTrigger value="store">App Store</TabsTrigger>
             </TabsList>
-            <TabsContent value="controls" className="mt-4">
-              <ControlPanel 
-                vmState={vmState}
-                setVmState={setVmState}
-                apkFile={apkFile}
-                setApkFile={setApkFile}
-                error={error}
-                isInstalling={isInstalling}
-                installedApps={installedApps}
-                onLaunchApp={(packageName) => {
-                  if (vm) {
-                    vm.launchApp(packageName)
-                  }
-                }}
-                onUninstallApp={(packageName) => {
-                  if (vm) {
-                    vm.uninstallApp(packageName)
-                    setApkFile(null)
-                  }
-                }}
-                runningAppPackage={vm?.getRunningApp()?.packageName || null}
-              />
-            </TabsContent>
+                <TabsContent value="controls" className="mt-4">
+                  <ControlPanel 
+                    vmState={vmState}
+                    setVmState={setVmState}
+                    apkFile={apkFile}
+                    setApkFile={setApkFile}
+                    error={error}
+                    isInstalling={isInstalling}
+                    installedApps={installedApps}
+                    onLaunchApp={(packageName) => {
+                      if (vm) {
+                        vm.launchApp(packageName)
+                      }
+                    }}
+                    onUninstallApp={(packageName) => {
+                      if (vm) {
+                        vm.uninstallApp(packageName)
+                        setApkFile(null)
+                      }
+                    }}
+                    runningAppPackage={vm?.getRunningApp()?.packageName || null}
+                    emulationMode={emulationMode}
+                    onEmulationModeChange={setEmulationMode}
+                  />
+                </TabsContent>
             <TabsContent value="store" className="mt-4">
               <AppStore 
                 onInstallAPK={handleInstallFromStore}

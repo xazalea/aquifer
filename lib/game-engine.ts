@@ -40,7 +40,11 @@ export class GameEngine {
       if (this.openglES) {
         // Use OpenGL ES translation layer
         this.gl = this.openglES.getContext()
-        console.log('OpenGL ES to WebGL translation layer initialized')
+        if (this.gl) {
+          console.log('OpenGL ES to WebGL translation layer initialized')
+        } else {
+          console.warn('WebGL not available, will use 2D canvas fallback for games')
+        }
       } else {
         // Fallback to direct WebGL
         const gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl')
@@ -52,7 +56,7 @@ export class GameEngine {
         console.log('WebGL initialized for game rendering')
       }
     } catch (error) {
-      console.error('Failed to initialize WebGL:', error)
+      console.warn('Failed to initialize WebGL, using 2D canvas fallback:', error)
     }
   }
 
@@ -119,7 +123,7 @@ export class GameEngine {
    */
   private render(): void {
     if (this.gl) {
-      // Clear screen
+      // Clear screen with WebGL
       this.gl.clearColor(0.0, 0.0, 0.0, 1.0)
       this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT)
       
@@ -128,20 +132,28 @@ export class GameEngine {
       // - Apply textures
       // - Handle lighting
       // - Render UI overlays
-    } else {
-      // Fallback to 2D canvas
-      const ctx = this.canvas.getContext('2d')
-      if (ctx) {
+    }
+    
+    // Always render fallback UI (works even without WebGL)
+    const ctx = this.canvas.getContext('2d')
+    if (ctx) {
+      if (!this.gl) {
+        // Only clear if WebGL didn't render
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
         ctx.fillStyle = '#000000'
         ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
-        
-        // Show game info
-        ctx.fillStyle = '#FFFFFF'
-        ctx.font = '16px sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText('Game Engine Active', this.canvas.width / 2, this.canvas.height / 2)
-        ctx.fillText(`FPS: ${this.gameState.fps}`, this.canvas.width / 2, this.canvas.height / 2 + 30)
+      }
+      
+      // Show game info overlay
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = '16px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Game Engine Active', this.canvas.width / 2, this.canvas.height / 2)
+      ctx.fillText(`FPS: ${this.gameState.fps}`, this.canvas.width / 2, this.canvas.height / 2 + 30)
+      if (!this.gl) {
+        ctx.fillStyle = '#FFFF00'
+        ctx.font = '12px sans-serif'
+        ctx.fillText('(2D Canvas Mode - WebGL not available)', this.canvas.width / 2, this.canvas.height / 2 + 60)
       }
     }
   }
