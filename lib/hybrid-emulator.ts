@@ -13,6 +13,9 @@ import { AndroidEmulator } from './android-emulator'
 import { WebVMEmuHubIntegration } from './webvm-emuhub-integration'
 import { EmuHubEmulator } from './emuhub-integration-enhanced'
 import { OptimizedAndroidVM } from './android-vm-optimized'
+import { performanceOptimizer } from './performance-optimizer'
+import { ErrorRecovery } from './error-recovery'
+import { LazyLoader } from './lazy-loader'
 
 export type EmulationMode = 'browser' | 'webvm-emuhub' | 'auto'
 
@@ -50,17 +53,20 @@ export class HybridEmulator {
     })
   }
 
-  /**
-   * Initialize the hybrid emulator
-   */
-  async init(): Promise<boolean> {
-    console.log('Initializing Hybrid Emulator, mode:', this.mode)
+      /**
+       * Initialize the hybrid emulator
+       */
+      async init(): Promise<boolean> {
+        const stopTiming = performanceOptimizer.startTiming('hybrid-emulator-init')
+        
+        try {
+          console.log('Initializing Hybrid Emulator, mode:', this.mode)
 
-    // Auto-detect best mode
-    if (this.mode === 'auto') {
-      this.mode = await this.detectBestMode()
-      console.log('Auto-selected mode:', this.mode)
-    }
+          // Auto-detect best mode
+          if (this.mode === 'auto') {
+            this.mode = await this.detectBestMode()
+            console.log('Auto-selected mode:', this.mode)
+          }
 
       switch (this.mode) {
         case 'webvm-emuhub': {
@@ -99,11 +105,26 @@ export class HybridEmulator {
           }
           return result
         }
-        case 'browser':
-        default:
-          return await this.initBrowser()
+            case 'browser':
+            default:
+              return await this.initBrowser()
+          }
+        } catch (error) {
+          // Attempt error recovery
+          const recovered = await ErrorRecovery.recover(
+            error instanceof Error ? error : new Error(String(error)),
+            'hybrid-emulator'
+          )
+          
+          if (!recovered) {
+            throw error
+          }
+          
+          return false
+        } finally {
+          stopTiming()
+        }
       }
-  }
 
   /**
    * Detect the best available emulation mode

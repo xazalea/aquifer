@@ -5,6 +5,8 @@ import { useAndroidVM } from '@/lib/useAndroidVM'
 import { EmuHubVNCViewer } from './EmuHubVNCViewer'
 import { EmulationMode } from './EmulationModeSelector'
 import { HybridEmulator } from '@/lib/hybrid-emulator'
+import { OptimizedRenderer } from '@/lib/optimized-renderer'
+import { performanceOptimizer } from '@/lib/performance-optimizer'
 import styles from './AndroidVM.module.css'
 
 interface AndroidVMProps {
@@ -21,6 +23,7 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
   const containerRef = useRef<HTMLDivElement>(null)
   const installedApkRef = useRef<string | null>(null) // Track installed APK to prevent re-installation
   const hybridEmulatorRef = useRef<HybridEmulator | null>(null)
+  const optimizedRendererRef = useRef<OptimizedRenderer | null>(null)
   const [vncUrl, setVncUrl] = useState<string | null>(null)
   const { vm, initVM, startVM, installAPK, isReady, error, isInstalling } = useAndroidVM()
 

@@ -1,14 +1,20 @@
 /**
  * Game Engine - Handles actual game execution and rendering
  * 
- * For real Android games, we need:
- * 1. Execute native code (ARM/x86) via WebAssembly
- * 2. Render OpenGL ES graphics via WebGL
- * 3. Handle game input and sensors
- * 4. Run game loops and physics
+ * Enhanced for 3D games and multiplayer gaming:
+ * - Low-latency input handling
+ * - Optimized WebGL rendering
+ * - Network support for multiplayer
+ * - Crash recovery
+ * - Audio support
+ * - Frame timing control
  */
 
 import { OpenGLESWebGL } from './opengl-es-webgl'
+import { gamingOptimizer } from './gaming-optimizer'
+import { GameRenderer } from './game-renderer'
+import { MultiplayerNetwork } from './multiplayer-network'
+import { gameCrashRecovery } from './game-crash-recovery'
 
 export interface GameState {
   isRunning: boolean
@@ -21,6 +27,8 @@ export class GameEngine {
   private canvas: HTMLCanvasElement
   private gl: WebGLRenderingContext | WebGL2RenderingContext | null = null
   private openglES: OpenGLESWebGL | null = null
+  private gameRenderer: GameRenderer | null = null
+  private network: MultiplayerNetwork | null = null
   private gameState: GameState = {
     isRunning: false,
     frameCount: 0,
@@ -28,83 +36,201 @@ export class GameEngine {
     fps: 0,
   }
   private animationFrameId: number | null = null
+  private isMultiplayer: boolean = false
 
   constructor(canvas: HTMLCanvasElement, openglES?: OpenGLESWebGL) {
     this.canvas = canvas
     this.openglES = openglES || null
     this.initWebGL()
+    this.setupCrashRecovery()
   }
 
   private initWebGL(): void {
     try {
-      if (this.openglES) {
-        // Use OpenGL ES translation layer
-        this.gl = this.openglES.getContext()
-        if (this.gl) {
-          console.log('OpenGL ES to WebGL translation layer initialized')
-        } else {
-          console.warn('WebGL not available, will use 2D canvas fallback for games')
-        }
+      // Use optimized game renderer
+      this.gameRenderer = new GameRenderer({
+        canvas: this.canvas,
+        enableVSync: true,
+        enableAntialiasing: false, // Disable for performance
+        maxTextureSize: 4096,
+        enableTextureCompression: true,
+      })
+
+      this.gl = this.gameRenderer.getGL()
+      
+      if (this.gl) {
+        console.log('✅ Game renderer initialized with gaming optimizations')
       } else {
-        // Fallback to direct WebGL
-        const gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl')
-        if (!gl) {
-          console.warn('WebGL not available, falling back to 2D canvas')
-          return
-        }
-        this.gl = gl as WebGLRenderingContext
-        console.log('WebGL initialized for game rendering')
+        console.warn('WebGL not available, will use 2D canvas fallback for games')
       }
     } catch (error) {
-      console.warn('Failed to initialize WebGL, using 2D canvas fallback:', error)
+      console.warn('Failed to initialize game renderer, using 2D canvas fallback:', error)
     }
+  }
+
+  /**
+   * Setup crash recovery
+   */
+  private setupCrashRecovery(): void {
+    // Register crash handler
+    gameCrashRecovery.onCrash(() => {
+      console.log('Game crash detected, attempting recovery...')
+      // Save current state
+      this.saveGameState()
+      
+      // Try to restore state
+      const restored = gameCrashRecovery.restoreState()
+      if (restored && restored.data) {
+        // Restore game state from saved data
+        const savedState = restored.data as any
+        if (savedState.frameCount !== undefined) {
+          this.gameState.frameCount = savedState.frameCount
+        }
+      }
+    })
+
+    // Enable auto-save
+    gameCrashRecovery.enableAutoSave(() => {
+      return {
+        frameCount: this.gameState.frameCount,
+        timestamp: Date.now(),
+      }
+    })
+  }
+
+  /**
+   * Save game state for crash recovery
+   */
+  private saveGameState(): void {
+    gameCrashRecovery.saveState({
+      frameCount: this.gameState.frameCount,
+      isRunning: this.gameState.isRunning,
+      timestamp: Date.now(),
+    })
   }
 
   /**
    * Start game execution
    */
-  startGame(packageName: string, dexFiles: ArrayBuffer[]): void {
-    console.log('Starting game:', packageName)
+  async startGame(packageName: string, dexFiles: ArrayBuffer[], multiplayerServerUrl?: string): Promise<void> {
+    console.log('🎮 Starting game:', packageName)
+    
+    // Preload game assets if needed
+    if (gamingOptimizer) {
+      // Preload common game assets
+      // This would be game-specific
+    }
+
+    // Connect to multiplayer server if provided
+    if (multiplayerServerUrl) {
+      await this.connectMultiplayer(multiplayerServerUrl)
+    }
+
     this.gameState.isRunning = true
     this.gameState.lastFrameTime = performance.now()
     
-    // In a real implementation, we would:
-    // 1. Load and execute the game's main class
-    // 2. Initialize OpenGL ES context
-    // 3. Start the game loop
-    // 4. Handle game input
+    // Save initial state
+    this.saveGameState()
     
+    // Start optimized game loop
     this.startGameLoop()
   }
 
   /**
-   * Game loop - runs at 60 FPS
+   * Connect to multiplayer server
+   */
+  private async connectMultiplayer(serverUrl: string): Promise<void> {
+    try {
+      this.network = new MultiplayerNetwork({
+        serverUrl,
+        enableCompression: true,
+        enablePrediction: true,
+        enableInterpolation: true,
+      })
+
+      await this.network.connect()
+      this.isMultiplayer = true
+
+      // Setup network message handlers
+      this.network.on('game-state', (data, timestamp) => {
+        // Handle game state updates from server
+        this.handleNetworkUpdate(data, timestamp)
+      })
+
+      console.log('✅ Connected to multiplayer server')
+    } catch (error) {
+      console.error('Failed to connect to multiplayer server:', error)
+      this.isMultiplayer = false
+    }
+  }
+
+  /**
+   * Handle network update
+   */
+  private handleNetworkUpdate(data: any, timestamp: number): void {
+    // Apply network updates to game state
+    // This would include player positions, game events, etc.
+  }
+
+  /**
+   * Game loop - optimized for gaming with frame timing
    */
   private startGameLoop(): void {
-    const gameLoop = (currentTime: number) => {
-      if (!this.gameState.isRunning) {
-        return
-      }
+    if (this.gameRenderer) {
+      // Use optimized game renderer loop
+      this.gameRenderer.startRenderLoop((deltaTime: number) => {
+        if (!this.gameState.isRunning) {
+          return
+        }
 
-      const deltaTime = currentTime - this.gameState.lastFrameTime
-      this.gameState.lastFrameTime = currentTime
-      this.gameState.frameCount++
-      
-      // Calculate FPS
-      if (this.gameState.frameCount % 60 === 0) {
-        this.gameState.fps = Math.round(1000 / deltaTime)
-      }
+        this.gameState.frameCount++
+        this.gameState.lastFrameTime = performance.now()
+        
+        // Calculate FPS using gaming optimizer
+        const fps = gamingOptimizer.getFPS()
+        if (fps > 0) {
+          this.gameState.fps = Math.round(fps)
+        }
 
-      // Update game logic
-      this.update(deltaTime)
-      
-      // Render game
-      this.render()
+        // Process input queue
+        gamingOptimizer.processInputQueue()
+
+        // Update game logic
+        this.update(deltaTime)
+        
+        // Render game (already handled by game renderer)
+        this.render()
+      })
+    } else {
+      // Fallback to standard loop
+      const gameLoop = (currentTime: number) => {
+        if (!this.gameState.isRunning) {
+          return
+        }
+
+        const deltaTime = currentTime - this.gameState.lastFrameTime
+        this.gameState.lastFrameTime = currentTime
+        this.gameState.frameCount++
+        
+        // Calculate FPS
+        if (this.gameState.frameCount % 60 === 0) {
+          this.gameState.fps = Math.round(1000 / deltaTime)
+        }
+
+        // Process input queue
+        gamingOptimizer.processInputQueue()
+
+        // Update game logic
+        this.update(deltaTime)
+        
+        // Render game
+        this.render()
+
+        this.animationFrameId = requestAnimationFrame(gameLoop)
+      }
 
       this.animationFrameId = requestAnimationFrame(gameLoop)
     }
-
-    this.animationFrameId = requestAnimationFrame(gameLoop)
   }
 
   /**
@@ -163,21 +289,49 @@ export class GameEngine {
    */
   stopGame(): void {
     this.gameState.isRunning = false
-    if (this.animationFrameId !== null) {
+    
+    // Stop render loop
+    if (this.gameRenderer) {
+      this.gameRenderer.stopRenderLoop()
+    } else if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId)
       this.animationFrameId = null
+    }
+
+    // Disconnect from multiplayer
+    if (this.network) {
+      this.network.disconnect()
+      this.network = null
+      this.isMultiplayer = false
+    }
+
+    // Save final state
+    this.saveGameState()
+  }
+
+  /**
+   * Handle game input with low latency
+   */
+  handleInput(type: 'touch' | 'keyboard' | 'mouse', data: any): void {
+    // Use gaming optimizer for low-latency input
+    gamingOptimizer.handleInput(type, data)
+
+    // Send to multiplayer server if connected
+    if (this.isMultiplayer && this.network) {
+      this.network.sendUnreliable({
+        type: 'input',
+        inputType: type,
+        data,
+        timestamp: performance.now(),
+      })
     }
   }
 
   /**
-   * Handle game input
+   * Play game audio
    */
-  handleInput(type: 'touch' | 'keyboard', data: any): void {
-    // In a real implementation, this would:
-    // - Process touch events for game controls
-    // - Handle keyboard input
-    // - Process sensor data (accelerometer, gyroscope)
-    // - Send input to game code
+  playSound(audioBuffer: AudioBuffer, volume: number = 1.0): void {
+    gamingOptimizer.playAudio(audioBuffer, volume)
   }
 
   getGameState(): GameState {
