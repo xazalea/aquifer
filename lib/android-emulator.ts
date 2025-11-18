@@ -69,14 +69,37 @@ export class AndroidEmulator {
   }
 
   private setupCanvas() {
-    // Set up canvas - use 1x for better performance on low-end devices
-    const rect = this.canvas.getBoundingClientRect()
-    this.canvas.width = rect.width
-    this.canvas.height = rect.height
-    this.canvas.style.width = `${rect.width}px`
-    this.canvas.style.height = `${rect.height}px`
-    // Disable image smoothing for better performance
-    this.ctx.imageSmoothingEnabled = false
+    // Set up canvas for fullscreen - use actual viewport size
+    const updateCanvasSize = () => {
+      const rect = this.canvas.getBoundingClientRect()
+      const width = Math.max(rect.width || window.innerWidth, 800)
+      const height = Math.max(rect.height || window.innerHeight, 600)
+      
+      this.canvas.width = width
+      this.canvas.height = height
+      this.canvas.style.width = `${width}px`
+      this.canvas.style.height = `${height}px`
+      
+      // Disable image smoothing for better performance
+      this.ctx.imageSmoothingEnabled = false
+    }
+    
+    // Wait for canvas to be in DOM
+    if (this.canvas.parentElement) {
+      updateCanvasSize()
+    } else {
+      // Use requestAnimationFrame to wait for DOM
+      requestAnimationFrame(() => {
+        updateCanvasSize()
+      })
+    }
+    
+    // Update on resize
+    const resizeHandler = () => updateCanvasSize()
+    window.addEventListener('resize', resizeHandler)
+    
+    // Store handler for cleanup if needed
+    ;(this as any)._resizeHandler = resizeHandler
   }
 
   public start() {

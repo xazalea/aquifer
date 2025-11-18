@@ -442,28 +442,43 @@ export class WebVMEmuHubIntegration {
   /**
    * Wait for EmuHub to be ready
    */
-  private async waitForEmuHubReady(maxAttempts: number = 30): Promise<void> {
-    console.log('Waiting for EmuHub to be ready...')
+  private async waitForEmuHubReady(maxAttempts: number = 5): Promise<void> {
+    // Only wait if WebVM is actually available (not simulated)
+    if (!this.webvm || !this.webvm.isReady || typeof this.webvm.isReady !== 'function' || !this.webvm.isReady()) {
+      // WebVM is not actually running, skip health check
+      return
+    }
     
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        const response = await fetch(`${this.emuhubServerUrl}/health`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(2000),
-        })
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 1000)
+        
+        try {
+          const response = await fetch(`${this.emuhubServerUrl}/health`, {
+            method: 'GET',
+            signal: controller.signal,
+          })
 
-        if (response.ok) {
-          console.log('EmuHub is ready!')
-          return
+          if (response.ok) {
+            clearTimeout(timeoutId)
+            return
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          // Connection refused is expected if EmuHub isn't running
+          if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
+            // Silently continue - EmuHub might not be available
+          }
         }
       } catch (error) {
-        // Not ready yet, wait and retry
+        // Silently continue
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (i < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
     }
-
-    console.warn('EmuHub did not become ready in time, but continuing...')
   }
 
   /**

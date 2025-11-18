@@ -14,9 +14,10 @@ interface EmuHubVNCViewerProps {
   vncUrl: string | null
   width?: number
   height?: number
+  className?: string
 }
 
-export function EmuHubVNCViewer({ vncUrl, width = 800, height = 600 }: EmuHubVNCViewerProps) {
+export function EmuHubVNCViewer({ vncUrl, width, height, className }: EmuHubVNCViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,9 +77,7 @@ export function EmuHubVNCViewer({ vncUrl, width = 800, height = 600 }: EmuHubVNC
       <iframe
         ref={iframeRef}
         src={vncUrl}
-        width={width}
-        height={height}
-        className={styles.vncFrame}
+        className={`${styles.vncFrame} ${className || ''}`}
         allow="clipboard-read; clipboard-write"
         title="Android Emulator VNC"
       />

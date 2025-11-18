@@ -2,12 +2,10 @@
 
 import { AndroidVM } from '@/components/AndroidVM'
 import { Header } from '@/components/Header'
-import { ControlPanel } from '@/components/ControlPanel'
-import { AppStore } from '@/components/AppStore'
+import { DynamicIsland } from '@/components/DynamicIsland'
 import { PWAInstaller } from '@/components/PWAInstaller'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { appStorage } from '@/lib/app-storage'
 import styles from './page.module.css'
 
@@ -16,8 +14,7 @@ export default function Home() {
   const [apkFile, setApkFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
-  const [activeTab, setActiveTab] = useState<'controls' | 'store'>('controls')
-  const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('auto')
+  const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('browser')
   const { installAPK, vm, installedApps } = useAndroidVM()
 
   // Initialize app storage
@@ -34,8 +31,7 @@ export default function Home() {
       const file = new File([blob], 'app.apk', { type: 'application/vnd.android.package-archive' })
       setApkFile(file)
       await installAPK(file)
-      // Switch to controls tab after installation
-      setActiveTab('controls')
+      // Installation complete
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to install APK'
       setError(errorMessage)
@@ -46,59 +42,42 @@ export default function Home() {
   }
 
   return (
-    <main className={`${styles.main} relative min-h-screen`}>
+    <main className={`${styles.main} relative`}>
       <Header />
-      <div className={styles.content}>
-            <div className={styles.vmContainer}>
-              <AndroidVM 
-                vmState={vmState}
-                setVmState={setVmState}
-                apkFile={apkFile}
-                onError={setError}
-                onInstallingChange={setIsInstalling}
-                emulationMode={emulationMode}
-              />
-            </div>
-        <div className={styles.panelContainer}>
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'controls' | 'store')} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="controls">Controls</TabsTrigger>
-              <TabsTrigger value="store">App Store</TabsTrigger>
-            </TabsList>
-                <TabsContent value="controls" className="mt-4">
-                  <ControlPanel 
-                    vmState={vmState}
-                    setVmState={setVmState}
-                    apkFile={apkFile}
-                    setApkFile={setApkFile}
-                    error={error}
-                    isInstalling={isInstalling}
-                    installedApps={installedApps}
-                    onLaunchApp={(packageName) => {
-                      if (vm) {
-                        vm.launchApp(packageName)
-                      }
-                    }}
-                    onUninstallApp={(packageName) => {
-                      if (vm) {
-                        vm.uninstallApp(packageName)
-                        setApkFile(null)
-                      }
-                    }}
-                    runningAppPackage={vm?.getRunningApp()?.packageName || null}
-                    emulationMode={emulationMode}
-                    onEmulationModeChange={setEmulationMode}
-                  />
-                </TabsContent>
-            <TabsContent value="store" className="mt-4">
-              <AppStore 
-                onInstallAPK={handleInstallFromStore}
-                isInstalling={isInstalling}
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
+      <div className={styles.fullscreenContainer}>
+        <AndroidVM 
+          vmState={vmState}
+          setVmState={setVmState}
+          apkFile={apkFile}
+          onError={setError}
+          onInstallingChange={setIsInstalling}
+          emulationMode={emulationMode}
+        />
       </div>
+      <DynamicIsland
+        vmState={vmState}
+        setVmState={setVmState}
+        apkFile={apkFile}
+        setApkFile={setApkFile}
+        error={error}
+        isInstalling={isInstalling}
+        installedApps={installedApps}
+        onLaunchApp={(packageName) => {
+          if (vm) {
+            vm.launchApp(packageName)
+          }
+        }}
+        onUninstallApp={(packageName) => {
+          if (vm) {
+            vm.uninstallApp(packageName)
+            setApkFile(null)
+          }
+        }}
+        runningAppPackage={vm?.getRunningApp()?.packageName || null}
+        emulationMode={emulationMode}
+        onEmulationModeChange={setEmulationMode}
+        onInstallFromStore={handleInstallFromStore}
+      />
       <PWAInstaller />
     </main>
   )

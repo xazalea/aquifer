@@ -169,7 +169,7 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     return (
       <div className={`${styles.container} relative`} ref={containerRef}>
         <div className={styles.vmWrapper}>
-          <EmuHubVNCViewer vncUrl={vncUrl} width={800} height={600} />
+          <EmuHubVNCViewer vncUrl={vncUrl} />
         </div>
       </div>
     )
@@ -181,8 +181,6 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
             <canvas
               ref={canvasRef}
               className={styles.canvas}
-              width={800}
-              height={600}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}

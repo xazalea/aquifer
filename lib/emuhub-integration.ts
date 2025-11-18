@@ -43,26 +43,34 @@ export class EmuHubIntegration {
    */
   async connect(): Promise<boolean> {
     try {
-      console.log('Connecting to EmuHub server:', this.config.serverUrl)
+      // Check if EmuHub server is available with timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2000)
       
-      // Check if EmuHub server is available
-      const response = await fetch(`${this.config.serverUrl}/health`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      })
+      try {
+        const response = await fetch(`${this.config.serverUrl}/health`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        })
 
-      if (response.ok) {
-        this.isConnected = true
-        console.log('Connected to EmuHub server')
-        await this.refreshEmulators()
-        return true
-      } else {
-        console.warn('EmuHub server not available, will use browser-based emulation')
+        clearTimeout(timeoutId)
+        
+        if (response.ok) {
+          this.isConnected = true
+          await this.refreshEmulators()
+          return true
+        } else {
+          return false
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        // Connection refused or timeout - EmuHub not available
+        // Silently return false - browser emulation will be used
         return false
       }
     } catch (error) {
-      console.warn('Failed to connect to EmuHub server:', error)
-      console.warn('Falling back to browser-based emulation')
+      // Silently fail - browser emulation will be used
       return false
     }
   }
