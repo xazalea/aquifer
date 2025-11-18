@@ -16,10 +16,11 @@
   }
 
   // WebVM CDN URLs (adjust based on actual WebVM distribution)
+  // Note: WebVM doesn't have an official CDN build yet
+  // You would need to build it yourself or use a custom build
   const WEBVM_CDN_URLS = [
-    'https://unpkg.com/@leaningtech/webvm/dist/webvm.js',
-    'https://cdn.jsdelivr.net/npm/@leaningtech/webvm/dist/webvm.js',
-    '/webvm.js', // Local fallback
+    // These URLs are placeholders - WebVM needs to be built and hosted
+    // '/webvm.js', // Local fallback - only if you have a built version
   ];
 
   let webvmLoaded = false;
