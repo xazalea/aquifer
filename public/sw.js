@@ -45,7 +45,34 @@ self.addEventListener('activate', (event) => {
 })
 
 // Fetch event - serve from cache, fallback to network
+// Also add Cross-Origin Isolation headers for CheerpX support
 self.addEventListener('fetch', (event) => {
+  // Add Cross-Origin Isolation headers for all responses (required for CheerpX SharedArrayBuffer)
+  if (event.request.method === 'GET') {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        // Clone response to modify headers
+        const newHeaders = new Headers(response.headers)
+        
+        // Add Cross-Origin Isolation headers (required for CheerpX SharedArrayBuffer)
+        newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+        newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+        newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
+        
+        // Return modified response
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
+        })
+      }).catch(() => {
+        // Fallback: try cache
+        return caches.match(event.request)
+      })
+    )
+    return
+  }
+  
   // Skip non-GET requests
   if (event.request.method !== 'GET') {
     return

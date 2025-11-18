@@ -21,12 +21,12 @@
 
   // Try to load WebVM (which includes CheerpX)
   // WebVM is open source and can be built from: https://github.com/leaningtech/webvm
+  // Note: We're using CheerpX from npm now, so WebVM loading is optional
   const WEBVM_URLS = [
     // Official WebVM build (if available)
     'https://unpkg.com/@leaningtech/webvm@latest/dist/webvm.js',
     'https://cdn.jsdelivr.net/npm/@leaningtech/webvm@latest/dist/webvm.js',
-    // Local build (if you've built WebVM yourself)
-    '/webvm.js',
+    // Note: /webvm.js removed - we use CheerpX from npm instead
     // Alternative: Load from GitHub releases
     'https://github.com/leaningtech/webvm/releases/latest/download/webvm.js',
   ];

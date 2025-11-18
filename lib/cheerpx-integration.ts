@@ -73,19 +73,38 @@ export class CheerpXIntegration {
         console.log('✅ CheerpX module loaded successfully')
         
         // Create Linux VM instance for command execution
+        // Note: This requires Cross-Origin Isolation headers (COEP/COOP)
         try {
-          const { Linux } = this.cheerpx
-          if (Linux) {
+          const { Linux, DataDevice } = this.cheerpx
+          if (Linux && DataDevice) {
+            // Check if Cross-Origin Isolation is enabled
+            if (typeof window !== 'undefined' && !window.crossOriginIsolated) {
+              console.warn('⚠️ Cross-Origin Isolation not enabled. CheerpX requires COEP/COOP headers.')
+              console.warn('💡 Ensure your server sends:')
+              console.warn('   - Cross-Origin-Opener-Policy: same-origin')
+              console.warn('   - Cross-Origin-Embedder-Policy: require-corp')
+              // Don't fail, but note that VM creation will fail
+            }
+            
             this.linux = await Linux.create({
               mounts: [
                 // Basic filesystem setup - can be extended for Docker
-                { type: 'ext2', dev: await this.cheerpx.DataDevice.create(), path: '/' }
+                { type: 'ext2', dev: await DataDevice.create(), path: '/' }
               ]
             })
             console.log('✅ CheerpX Linux VM created')
           }
         } catch (vmError) {
-          console.warn('⚠️ Could not create Linux VM yet, will create on demand:', vmError)
+          const errorMsg = vmError instanceof Error ? vmError.message : String(vmError)
+          if (errorMsg.includes('SharedArrayBuffer') || errorMsg.includes('crossOriginIsolated')) {
+            console.error('❌ CheerpX requires Cross-Origin Isolation headers')
+            console.error('💡 Add to your server/Next.js config:')
+            console.error('   - Cross-Origin-Opener-Policy: same-origin')
+            console.error('   - Cross-Origin-Embedder-Policy: require-corp')
+            console.error('   - Cross-Origin-Resource-Policy: cross-origin')
+          } else {
+            console.warn('⚠️ Could not create Linux VM yet, will create on demand:', vmError)
+          }
         }
         
         return true
