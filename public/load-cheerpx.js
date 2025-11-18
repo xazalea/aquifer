@@ -19,16 +19,12 @@
     return;
   }
 
-  // Try to load WebVM (which includes CheerpX)
-  // WebVM is open source and can be built from: https://github.com/leaningtech/webvm
-  // Note: We're using CheerpX from npm now, so WebVM loading is optional
+  // Note: We're using CheerpX from npm now (@leaningtech/cheerpx)
+  // WebVM CDN URLs are blocked by COEP (Cross-Origin-Embedder-Policy)
+  // If you need WebVM, build it locally and place in /public directory
   const WEBVM_URLS = [
-    // Official WebVM build (if available)
-    'https://unpkg.com/@leaningtech/webvm@latest/dist/webvm.js',
-    'https://cdn.jsdelivr.net/npm/@leaningtech/webvm@latest/dist/webvm.js',
-    // Note: /webvm.js removed - we use CheerpX from npm instead
-    // Alternative: Load from GitHub releases
-    'https://github.com/leaningtech/webvm/releases/latest/download/webvm.js',
+    // Local build only (if you've built WebVM yourself)
+    // CDN URLs removed because they're blocked by COEP headers
   ];
 
   // BrowserPod SDK (when available)
@@ -88,11 +84,9 @@
       }
     }
 
-    console.warn('⚠️ CheerpX/WebVM/BrowserPod not available. Docker operations will be limited.');
-    console.warn('💡 To enable full Docker support:');
-    console.warn('   1. Build WebVM from: https://github.com/leaningtech/webvm');
-    console.warn('   2. Place webvm.js in /public directory');
-    console.warn('   3. Or wait for BrowserPod GA (November 2025)');
+    // CheerpX from npm should be loaded by the TypeScript integration
+    // This loader is just for WebVM/BrowserPod fallback
+    // Don't show warnings - CheerpX is loaded via npm import
     return false;
   };
 

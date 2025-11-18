@@ -47,55 +47,55 @@ self.addEventListener('activate', (event) => {
 // Fetch event - serve from cache, fallback to network
 // Also add Cross-Origin Isolation headers for CheerpX support
 self.addEventListener('fetch', (event) => {
-  // Add Cross-Origin Isolation headers for all responses (required for CheerpX SharedArrayBuffer)
-  if (event.request.method === 'GET') {
-    event.respondWith(
-      fetch(event.request).then((response) => {
-        // Clone response to modify headers
-        const newHeaders = new Headers(response.headers)
-        
-        // Add Cross-Origin Isolation headers (required for CheerpX SharedArrayBuffer)
-        newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
-        newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
-        newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
-        
-        // Return modified response
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: newHeaders,
-        })
-      }).catch(() => {
-        // Fallback: try cache
-        return caches.match(event.request)
-      })
-    )
-    return
-  }
-  
   // Skip non-GET requests
   if (event.request.method !== 'GET') {
     return
   }
 
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
+  const url = new URL(event.request.url)
+  
+  // Skip cross-origin requests (including localhost)
+  // Service workers can't modify cross-origin responses anyway
+  if (!url.origin || url.origin !== self.location.origin) {
+    // Don't intercept - let browser handle it
     return
   }
-
+  
+  // Only handle same-origin requests
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        return cachedResponse
+        // Add COI headers to cached response
+        const newHeaders = new Headers(cachedResponse.headers)
+        newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+        newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+        newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
+        
+        return new Response(cachedResponse.body, {
+          status: cachedResponse.status,
+          statusText: cachedResponse.statusText,
+          headers: newHeaders,
+        })
       }
 
+      // Not in cache, fetch from network
       return fetch(event.request).then((response) => {
         // Don't cache if not a valid response
         if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response
+          // Still add COI headers
+          const newHeaders = new Headers(response.headers)
+          newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+          newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+          newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
+          
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders,
+          })
         }
 
-        // Clone the response
+        // Clone the response for caching
         const responseToCache = response.clone()
 
         // Cache runtime assets
@@ -103,12 +103,37 @@ self.addEventListener('fetch', (event) => {
           cache.put(event.request, responseToCache)
         })
 
-        return response
+        // Add COI headers to response
+        const newHeaders = new Headers(response.headers)
+        newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+        newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+        newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
+        
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
+        })
       }).catch(() => {
         // Return offline page if available
         if (event.request.destination === 'document') {
-          return caches.match('/')
+          return caches.match('/').then((offlinePage) => {
+            if (offlinePage) {
+              const newHeaders = new Headers(offlinePage.headers)
+              newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+              newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+              newHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin')
+              
+              return new Response(offlinePage.body, {
+                status: offlinePage.status,
+                statusText: offlinePage.statusText,
+                headers: newHeaders,
+              })
+            }
+            return new Response('Offline', { status: 503 })
+          })
         }
+        return new Response('Network error', { status: 503 })
       })
     })
   )
