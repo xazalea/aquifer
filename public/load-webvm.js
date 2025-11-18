@@ -53,7 +53,7 @@
         await loadWebVMFromCDN(url);
         return true;
       } catch (error) {
-        console.warn(`Failed to load WebVM from ${url}:`, error);
+        // Silently continue to next URL
         continue;
       }
     }
@@ -71,15 +71,12 @@
         // WebVM is now available globally
         return true;
       } else {
-        console.warn('WebVM not available. Docker operations will be limited.');
-        console.warn('To enable WebVM:');
-        console.warn('1. Add WebVM script to your HTML');
-        console.warn('2. Or ensure WebVM is available at one of the CDN URLs');
-        console.warn('3. Or place webvm.js in /public directory');
+        // WebVM not available - this is expected if not loaded
+        // Don't show warnings as it's optional
         return false;
       }
     } catch (error) {
-      console.error('Failed to initialize WebVM:', error);
+      // Silently fail - WebVM is optional
       return false;
     }
   };

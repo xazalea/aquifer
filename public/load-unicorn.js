@@ -21,8 +21,7 @@
       // You would need to compile it to WebAssembly yourself
       // or use a pre-built version
       
-      // For now, we'll create a stub that can be replaced
-      console.warn('Unicorn Engine CDN not available. Please compile Unicorn to WASM.');
+      // Silently reject - Unicorn is optional, arm-js fallback will be used
       reject(new Error('Unicorn Engine not available from CDN'));
     });
   };
@@ -37,10 +36,9 @@
       
       // Initialize Unicorn bindings
       // This would require JavaScript bindings for Unicorn
-      console.log('Unicorn Engine loaded from local build');
       return wasmModule;
     } catch (error) {
-      console.warn('Failed to load Unicorn from local build:', error);
+      // Silently fail - Unicorn is optional, arm-js fallback will be used
       throw error;
     }
   };
@@ -51,11 +49,8 @@
       // Try local first, then CDN
       return await loadFromLocal().catch(() => loadFromCDN());
     } catch (error) {
-      console.warn('Unicorn Engine not available. ARM emulation will be limited.');
-      console.warn('To enable full ARM emulation:');
-      console.warn('1. Compile Unicorn Engine to WebAssembly using Emscripten');
-      console.warn('2. Place unicorn.wasm in /public directory');
-      console.warn('3. Or integrate arm-js as a JavaScript fallback');
+      // Unicorn Engine not available - this is expected, arm-js fallback will be used
+      // Don't show warnings as it's optional
       return null;
     }
   };
