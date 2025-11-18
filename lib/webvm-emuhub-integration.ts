@@ -14,6 +14,7 @@
  */
 
 import { EnhancedEmuHubIntegration, EmuHubEmulator } from './emuhub-integration-enhanced'
+import { CheerpXIntegration } from './cheerpx-integration'
 
 export interface WebVMEmuHubConfig {
   webvmMemorySize?: number
@@ -25,6 +26,7 @@ export interface WebVMEmuHubConfig {
 
 export class WebVMEmuHubIntegration {
   private webvm: any = null
+  private cheerpx: CheerpXIntegration | null = null
   private emuhub: EnhancedEmuHubIntegration
   private isInitialized: boolean = false
   private dockerContainerId: string | null = null
@@ -83,9 +85,15 @@ export class WebVMEmuHubIntegration {
         const connected = await this.emuhub.connect(3) // Quick check, 3 retries
         
         if (connected) {
-          console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
-          this.isInitialized = true
-          return true
+          // Verify it's actually working by checking health
+          const healthOk = await this.verifyEmuHubHealth(3)
+          if (healthOk) {
+            console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
+            this.isInitialized = true
+            return true
+          } else {
+            console.warn(`⚠️ EmuHub at ${serverUrl} not responding to health checks`)
+          }
         }
       }
 
@@ -120,7 +128,14 @@ export class WebVMEmuHubIntegration {
       const emuhubConnected = await this.emuhub.connect(10) // More retries for container startup
       if (!emuhubConnected) {
         console.warn('⚠️ EmuHub container started but not responding yet')
-        // Still mark as initialized, it might be starting up
+        // Verify it actually works by checking health endpoint
+        const healthCheck = await this.verifyEmuHubHealth(10) // More attempts for real container
+        if (!healthCheck) {
+          console.warn('⚠️ EmuHub health check failed after container creation')
+          console.warn('💡 Container may still be starting. This is normal for first-time setup.')
+          // Don't fail immediately - give it more time for real containers
+          // The health check will be done again when trying to use EmuHub
+        }
       }
 
       this.isInitialized = true
@@ -133,197 +148,246 @@ export class WebVMEmuHubIntegration {
   }
 
   /**
-   * Initialize WebVM
+   * Initialize WebVM/CheerpX (REAL implementation, no simulation)
    */
   private async initWebVM(): Promise<boolean> {
     try {
-      // Try to load WebVM
-      if (typeof window !== 'undefined' && (window as any).WebVM) {
-        this.webvm = (window as any).WebVM
-      } else {
-        // Try to load from CDN or local
-        await this.loadWebVM()
-      }
+      console.log('🚀 Initializing real WebVM/CheerpX...')
 
-      if (!this.webvm) {
-        // Create a minimal WebVM-like interface for Docker operations
-        this.webvm = await this.createWebVMLikeInterface()
-      }
+      // First, try CheerpX integration (real implementation)
+      this.cheerpx = new CheerpXIntegration({
+        memorySize: this.config.webvmMemorySize,
+        enableDocker: true,
+      })
 
-      if (this.webvm) {
-        // Initialize WebVM instance
-        if (typeof this.webvm === 'function') {
-          try {
-            this.webvm = new this.webvm({
-              memorySize: this.config.webvmMemorySize,
-            })
-          } catch (error) {
-            // If WebVM constructor fails, use fallback interface
-            this.webvm = await this.createWebVMLikeInterface()
-          }
-        }
-
+      const cheerpxInitialized = await this.cheerpx.init()
+      if (cheerpxInitialized && this.cheerpx.isReady()) {
+        console.log('✅ CheerpX initialized - using real Docker support')
+        // Use CheerpX for Docker operations
+        this.webvm = this.cheerpx.getInstance()
         return true
       }
 
+      // Fallback: Try WebVM directly
+      if (typeof window !== 'undefined') {
+        if ((window as any).WebVM) {
+          const WebVM = (window as any).WebVM
+          try {
+            this.webvm = new WebVM({
+              memorySize: this.config.webvmMemorySize,
+            })
+            console.log('✅ WebVM initialized - using real Docker support')
+            return true
+          } catch (error) {
+            console.warn('⚠️ WebVM constructor failed:', error)
+          }
+        }
+
+        // Try BrowserPod
+        if ((window as any).BrowserPod) {
+          try {
+            this.webvm = (window as any).BrowserPod
+            console.log('✅ BrowserPod SDK found - using real Docker support')
+            return true
+          } catch (error) {
+            console.warn('⚠️ BrowserPod initialization failed:', error)
+          }
+        }
+      }
+
+      // Try to load from CDN
+      await this.loadWebVM()
+      
+      if (typeof window !== 'undefined' && (window as any).WebVM) {
+        const WebVM = (window as any).WebVM
+        try {
+          this.webvm = new WebVM({
+            memorySize: this.config.webvmMemorySize,
+          })
+          console.log('✅ WebVM loaded and initialized')
+          return true
+        } catch (error) {
+          console.warn('⚠️ WebVM initialization failed:', error)
+        }
+      }
+
+      // NO FALLBACK - return false if real WebVM/CheerpX is not available
+      console.error('❌ Real WebVM/CheerpX/BrowserPod not available. Cannot run Docker containers.')
+      console.error('💡 To enable: Build WebVM from https://github.com/leaningtech/webvm or use BrowserPod SDK')
       return false
     } catch (error) {
-      // Silently fail - WebVM is optional
+      console.error('❌ Failed to initialize WebVM/CheerpX:', error)
       return false
     }
   }
 
   /**
-   * Load WebVM from CDN or create interface
+   * Load WebVM from CDN
    */
   private async loadWebVM(): Promise<void> {
-    // In a real implementation, this would load WebVM script
-    // For now, we'll create a Docker-compatible interface
-    return Promise.resolve()
+    // Wait a bit for load-cheerpx.js to finish loading
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Check if it's now available
+    if (typeof window !== 'undefined' && ((window as any).WebVM || (window as any).CheerpX || (window as any).BrowserPod)) {
+      return
+    }
+
+    // If still not available, try loading directly
+    const urls = [
+      'https://unpkg.com/@leaningtech/webvm@latest/dist/webvm.js',
+      'https://cdn.jsdelivr.net/npm/@leaningtech/webvm@latest/dist/webvm.js',
+      '/webvm.js',
+    ]
+
+    for (const url of urls) {
+      try {
+        await this.loadScript(url)
+        if ((window as any).WebVM) {
+          return
+        }
+      } catch (error) {
+        continue
+      }
+    }
   }
 
   /**
-   * Create a WebVM-like interface for Docker operations
-   * This allows us to work even if WebVM isn't fully available
+   * Load a script dynamically
    */
-  private async createWebVMLikeInterface(): Promise<any> {
-    // Check if WebVM is available globally
-    if (typeof window !== 'undefined' && (window as any).WebVM) {
-      const WebVM = (window as any).WebVM
-      // Create WebVM instance with Docker support
-      return new WebVM({
-        memorySize: this.config.webvmMemorySize,
-        enableDocker: true, // Enable Docker support
-      })
+  private loadScript(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (typeof window === 'undefined') {
+        reject(new Error('Window not available'))
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error(`Failed to load: ${url}`))
+      document.head.appendChild(script)
+    })
+  }
+
+  /**
+   * Execute Docker command using CheerpX or WebVM (REAL implementation)
+   */
+  private async executeDockerCommandReal(command: string): Promise<string> {
+    // Use CheerpX if available
+    if (this.cheerpx && this.cheerpx.isReady()) {
+      try {
+        return await this.cheerpx.execute(command)
+      } catch (error) {
+        console.error('CheerpX command execution failed:', error)
+        throw error
+      }
     }
 
-    // Fallback: Create a minimal interface that can execute Docker commands
-    // In a real implementation, this would use WebVM's actual Docker support
-    // Use a flag to prevent infinite recursion
-    let executingCommand = false
-    
-    const executeCommandDirectly = async (command: string): Promise<string> => {
-      // Simulate command execution - in real WebVM this would actually run
-      console.log('WebVM would execute:', command)
-      // Return simulated success
-      if (command.includes('docker ps')) {
-        return 'CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS   PORTS   NAMES'
+    // Use WebVM if available
+    if (this.webvm) {
+      // WebVM-style execution
+      if (this.webvm.execute) {
+        return await this.webvm.execute(command)
       }
-      if (command.includes('docker run')) {
-        // Return a simulated container ID
-        return 'a1b2c3d4e5f6'
+      
+      // BrowserPod-style execution
+      if (this.webvm.runCommand) {
+        return await this.webvm.runCommand(command)
       }
-      return 'success'
+
+      // Terminal execution
+      if (this.webvm.terminal && this.webvm.terminal.execute) {
+        return await this.webvm.terminal.execute(command)
+      }
     }
-    
-    return {
-      execute: async (command: string): Promise<string> => {
-        if (executingCommand) {
-          // Prevent recursion
-          return executeCommandDirectly(command)
-        }
-        executingCommand = true
-        try {
-          return await executeCommandDirectly(command)
-        } finally {
-          executingCommand = false
-        }
-      },
-      isReady: () => true,
-      docker: {
-        run: async (image: string, options: any) => {
-          // Build docker run command from options
-          let cmd = 'docker run -d'
-          if (options?.name) cmd += ` --name ${options.name}`
-          if (options?.privileged) cmd += ' --privileged'
-          if (options?.env) {
-            for (const [key, value] of Object.entries(options.env)) {
-              cmd += ` -e ${key}=${value}`
-            }
-          }
-          if (options?.ports) {
-            for (const [containerPort, hostPort] of Object.entries(options.ports)) {
-              cmd += ` -p ${hostPort}:${containerPort}`
-            }
-          }
-          cmd += ` ${image}`
-          const result = await executeCommandDirectly(cmd)
-          // Extract container ID from output (first line, first 12 chars typically)
-          return result.trim().split('\n')[0]?.substring(0, 12) || result.trim()
-        },
-        ps: async () => {
-          const result = await executeCommandDirectly('docker ps --format "{{.ID}}\t{{.Names}}"')
-          // Parse container list
-          return result.split('\n')
-            .filter(line => line.trim())
-            .map(line => {
-              const parts = line.split('\t')
-              const id = parts[0]?.trim() || ''
-              const names = parts[1]?.trim().split(',') || []
-              return { id, names }
-            })
-        },
-        start: async (containerId: string) => {
-          return await executeCommandDirectly(`docker start ${containerId}`)
-        },
-        stop: async (containerId: string) => {
-          return await executeCommandDirectly(`docker stop ${containerId}`)
-        },
-        exec: async (command: string) => {
-          // Direct execution using executeCommandDirectly - this prevents recursion
-          // because executeCommandDirectly doesn't call executeDockerCommand
-          return await executeCommandDirectly(command)
-        },
-      },
-    }
+
+    throw new Error('No real Docker execution available')
   }
+
+  /**
+   * REMOVED: createWebVMLikeInterface
+   * 
+   * Simulation has been completely removed.
+   * Only real CheerpX/WebVM/BrowserPod implementations are used.
+   * 
+   * To enable Docker:
+   * 1. Build WebVM from https://github.com/leaningtech/webvm
+   * 2. Place webvm.js and webvm.wasm in /public directory
+   * 3. Or register for BrowserPod SDK: https://browserpod.io/
+   */
+  
+  // This method no longer exists - simulation is not allowed
 
   private isExecutingCommand: boolean = false
 
   /**
-   * Execute Docker command (via WebVM or fallback)
+   * Execute Docker command (via REAL WebVM/CheerpX - NO SIMULATION)
    */
   private async executeDockerCommand(command: string): Promise<string> {
     // CRITICAL: Prevent infinite recursion - check flag FIRST
     if (this.isExecutingCommand) {
-      // Direct fallback to prevent recursion - never call docker.exec when flag is set
-      return this.simulateDockerCommand(command)
+      throw new Error('Docker command already executing')
     }
 
     // Set flag BEFORE any async operations
     this.isExecutingCommand = true
     
     try {
-      // If WebVM has Docker API exec, use it
-      // Note: Our fallback docker.exec calls executeCommandDirectly (not executeDockerCommand),
-      // so it won't cause recursion. The flag is just a safety measure.
-      if (this.webvm && this.webvm.docker && typeof this.webvm.docker.exec === 'function') {
+      // Try REAL CheerpX execution first
+      if (this.cheerpx && this.cheerpx.isReady()) {
         try {
-          const result = await this.webvm.docker.exec(command)
-          // If it succeeded and returned a value, return it
-          if (result !== undefined && result !== null && result !== '') {
-            return result
-          }
+          const result = await this.cheerpx.execute(command)
+          return result
         } catch (error) {
-          // If it fails, fall through to simulation
+          console.error('CheerpX execution failed:', error)
+          throw error
         }
       }
 
-      // If WebVM has execute function, use it
-      if (this.webvm && typeof this.webvm.execute === 'function') {
-        try {
-          const result = await this.webvm.execute(command)
-          // If it succeeded and returned a value, return it
-          if (result !== undefined && result !== null && result !== '') {
-            return result
+      // Try REAL WebVM execution
+      if (this.webvm) {
+        // WebVM Docker API
+        if (this.webvm.docker && typeof this.webvm.docker.exec === 'function') {
+          try {
+            const result = await this.webvm.docker.exec(command)
+            if (result !== undefined && result !== null && result !== '') {
+              return result
+            }
+          } catch (error) {
+            console.error('WebVM Docker API execution failed:', error)
+            throw error
           }
-        } catch (error) {
-          // If it fails, fall through to simulation
+        }
+
+        // WebVM execute function
+        if (typeof this.webvm.execute === 'function') {
+          try {
+            const result = await this.webvm.execute(command)
+            if (result !== undefined && result !== null && result !== '') {
+              return result
+            }
+          } catch (error) {
+            console.error('WebVM execute failed:', error)
+            throw error
+          }
+        }
+
+        // BrowserPod-style
+        if (typeof this.webvm.runCommand === 'function') {
+          try {
+            const result = await this.webvm.runCommand(command)
+            return result
+          } catch (error) {
+            console.error('BrowserPod runCommand failed:', error)
+            throw error
+          }
         }
       }
 
-      // Fallback: Simulate command execution
-      return this.simulateDockerCommand(command)
+      // NO FALLBACK - throw error if real execution is not available
+      throw new Error('Real Docker execution not available. WebVM/CheerpX not initialized.')
     } finally {
       // Always reset flag, even if there was an error
       this.isExecutingCommand = false
@@ -331,53 +395,50 @@ export class WebVMEmuHubIntegration {
   }
 
   /**
-   * Simulate Docker command execution (fallback)
-   */
-  private simulateDockerCommand(command: string): string {
-    // Simulate successful execution - in real WebVM this would actually run
-    if (command.includes('docker ps')) {
-      return 'CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS   PORTS   NAMES'
-    }
-    if (command.includes('docker run')) {
-      // Return a simulated container ID
-      return 'a1b2c3d4e5f6'
-    }
-    if (command.includes('docker start') || command.includes('docker stop')) {
-      return 'success'
-    }
-    return 'success'
-  }
-
-  /**
-   * Start Docker daemon in WebVM
+   * Start Docker daemon in WebVM (REAL implementation)
    */
   private async startDockerInWebVM(): Promise<boolean> {
     try {
-      // Check if Docker is already running
+      // Check if Docker is available using REAL execution
       try {
-        const dockerCheck = await this.executeDockerCommand('docker ps')
-        if (dockerCheck && dockerCheck.includes('CONTAINER')) {
-          console.log('Docker is already running in WebVM')
-          return true
+        const dockerCheck = await this.executeDockerCommand('docker --version')
+        if (dockerCheck && (dockerCheck.includes('Docker version') || dockerCheck.includes('docker'))) {
+          console.log('✅ Docker is available in WebVM/CheerpX')
+          
+          // Check if Docker daemon is running
+          try {
+            await this.executeDockerCommand('docker ps')
+            console.log('✅ Docker daemon is running')
+            return true
+          } catch (error) {
+            console.log('⚠️ Docker daemon not running, attempting to start...')
+            // Try to start Docker daemon
+            try {
+              await this.executeDockerCommand('dockerd &')
+              // Wait a bit for Docker to start
+              await new Promise(resolve => setTimeout(resolve, 3000))
+              // Check again
+              await this.executeDockerCommand('docker ps')
+              console.log('✅ Docker daemon started')
+              return true
+            } catch (startError) {
+              console.warn('⚠️ Could not start Docker daemon:', startError)
+              return false
+            }
+          }
         }
       } catch (error) {
-        // Docker not running yet, continue to start it
+        console.warn('⚠️ Docker not available:', error)
+        return false
       }
 
-      // Start Docker daemon
-      // In real WebVM, this would start Docker
-      // For now, assume Docker is available if WebVM is initialized
-      if (this.webvm) {
-        console.log('Docker daemon ready in WebVM')
-        return true
-      }
-      
       return false
     } catch (error) {
-      // Silently fail - Docker might not be available
+      console.error('❌ Failed to start Docker:', error)
       return false
     }
   }
+
 
   /**
    * Start EmuHub Docker container in WebVM
@@ -386,8 +447,43 @@ export class WebVMEmuHubIntegration {
     try {
       console.log('Starting EmuHub container in WebVM...')
 
+      // Use CheerpX Docker API if available
+      if (this.cheerpx && this.cheerpx.isReady()) {
+        try {
+          // Check if container already exists
+          const containers = await this.cheerpx.dockerPs()
+          const existingContainer = containers.find((c: any) => c?.names?.includes('emuhub'))
+          
+          if (existingContainer && existingContainer.id) {
+            // Container exists, start it
+            console.log('🔄 Starting existing EmuHub container...')
+            await this.cheerpx.execute(`docker start ${existingContainer.id}`)
+            this.dockerContainerId = existingContainer.id
+          } else {
+            // Create and start new container using CheerpX
+            console.log('📦 Creating new EmuHub container in CheerpX...')
+            const containerId = await this.cheerpx.dockerRun(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
+              name: 'emuhub',
+              privileged: true,
+              env: {
+                VNCPASS: this.config.vncPassword || 'admin',
+                emuhubPASS: this.config.emuhubPassword || 'admin',
+                LISTENPORT: (this.config.emuhubPort || 8000).toString(),
+              },
+              ports: {
+                [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
+              },
+            })
+            this.dockerContainerId = containerId.trim()
+            console.log('✅ EmuHub container created:', this.dockerContainerId)
+          }
+        } catch (error) {
+          console.error('❌ CheerpX Docker API failed:', error)
+          throw error
+        }
+      }
       // Use WebVM's Docker API if available
-      if (this.webvm && this.webvm.docker && this.webvm.docker.run) {
+      else if (this.webvm && this.webvm.docker && this.webvm.docker.run) {
         try {
           // Check if container already exists
           const containers = await this.webvm.docker.ps()
@@ -397,18 +493,18 @@ export class WebVMEmuHubIntegration {
           
           if (existingContainer && existingContainer.id) {
             // Container exists, start it
-            console.log('Starting existing EmuHub container...')
+            console.log('🔄 Starting existing EmuHub container...')
             await this.webvm.docker.start(existingContainer.id)
             this.dockerContainerId = existingContainer.id
           } else {
             // Create and start new container using WebVM Docker API
-            console.log('Creating new EmuHub container in WebVM...')
-            const containerId = await this.webvm.docker.run(this.config.emuhubImage, {
+            console.log('📦 Creating new EmuHub container in WebVM...')
+            const containerId = await this.webvm.docker.run(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
               name: 'emuhub',
               privileged: true,
               env: {
-                VNCPASS: this.config.vncPassword,
-                emuhubPASS: this.config.emuhubPassword,
+                VNCPASS: this.config.vncPassword || 'admin',
+                emuhubPASS: this.config.emuhubPassword || 'admin',
                 LISTENPORT: (this.config.emuhubPort || 8000).toString(),
               },
               ports: {
@@ -416,17 +512,16 @@ export class WebVMEmuHubIntegration {
               },
             })
             this.dockerContainerId = containerId || null
-            console.log('EmuHub container created in WebVM:', this.dockerContainerId)
+            console.log('✅ EmuHub container created in WebVM:', this.dockerContainerId)
           }
         } catch (error) {
-          // If WebVM Docker API fails, fall through to command-line fallback
-          console.log('WebVM Docker API not available, using fallback method')
+          console.error('❌ WebVM Docker API failed:', error)
+          throw error
         }
       }
-      
-      // Fallback to command-line Docker if WebVM Docker API not available
-      if (!this.dockerContainerId) {
-        // Fallback to command-line Docker
+      // Fallback to command-line Docker (REAL execution)
+      else {
+        // Use command-line Docker (REAL execution via CheerpX/WebVM)
         try {
           const existingContainers = await this.executeDockerCommand(
             'docker ps -a --filter "name=emuhub" --format "{{.ID}}"'
@@ -434,27 +529,28 @@ export class WebVMEmuHubIntegration {
 
           if (existingContainers && existingContainers.trim()) {
             // Container exists, start it
-            console.log('Starting existing EmuHub container...')
+            console.log('🔄 Starting existing EmuHub container...')
             await this.executeDockerCommand('docker start emuhub')
             this.dockerContainerId = existingContainers.trim().split('\n')[0]
+            console.log('✅ EmuHub container started:', this.dockerContainerId)
           } else {
-            // Create and start new container
-            console.log('Creating new EmuHub container...')
+            // Create and start new container (REAL Docker execution)
+            console.log('📦 Creating new EmuHub container (REAL Docker)...')
             const dockerCommand = `docker run -d \
               --name emuhub \
               --privileged \
-              -e VNCPASS=${this.config.vncPassword} \
-              -e emuhubPASS=${this.config.emuhubPassword} \
+              -e VNCPASS=${this.config.vncPassword || 'admin'} \
+              -e emuhubPASS=${this.config.emuhubPassword || 'admin'} \
               -e LISTENPORT=${this.config.emuhubPort || 8000} \
-              -p ${this.config.emuhubPort || 8000}:${this.config.emuhubPort || 8000} \
-              ${this.config.emuhubImage}`
+              -p ${this.config.emuhubPort || 8000}:${this.config.emuhubPort || 8000}/tcp \
+              ${this.config.emuhubImage || 'mohamedhelmy/emuhub:latest'}`
 
             const containerId = await this.executeDockerCommand(dockerCommand)
             this.dockerContainerId = containerId.trim()
-            console.log('EmuHub container created:', this.dockerContainerId)
+            console.log('✅ EmuHub container created (REAL):', this.dockerContainerId)
           }
         } catch (error) {
-          console.error('Failed to create EmuHub container:', error)
+          console.error('❌ Failed to create EmuHub container (REAL Docker):', error)
           throw error
         }
       }
@@ -477,6 +573,41 @@ export class WebVMEmuHubIntegration {
       console.error('Failed to start EmuHub container:', error)
       return false
     }
+  }
+
+  /**
+   * Verify EmuHub health endpoint is actually responding
+   */
+  private async verifyEmuHubHealth(maxAttempts: number = 5): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 2000)
+        
+        try {
+          const response = await fetch(`${this.emuhubServerUrl}/health`, {
+            method: 'GET',
+            signal: controller.signal,
+          })
+
+          clearTimeout(timeoutId)
+          
+          if (response.ok) {
+            return true
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+        }
+      } catch (error) {
+        // Continue checking
+      }
+
+      if (i < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+    }
+    
+    return false
   }
 
   /**

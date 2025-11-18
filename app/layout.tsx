@@ -29,6 +29,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script src="/load-unicorn.js" defer></script>
+        <script src="/load-cheerpx.js" defer></script>
         <script src="/load-webvm.js" defer></script>
       </head>
       <body>

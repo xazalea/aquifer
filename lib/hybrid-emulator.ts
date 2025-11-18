@@ -61,8 +61,15 @@ export class HybridEmulator {
     }
 
     switch (this.mode) {
-      case 'webvm-emuhub':
-        return await this.initWebVMEmuHub()
+      case 'webvm-emuhub': {
+        const originalMode = this.mode
+        const result = await this.initWebVMEmuHub()
+        // If initWebVMEmuHub switched to browser mode, use that
+        if (this.mode !== originalMode && this.mode === 'browser') {
+          return await this.initBrowser()
+        }
+        return result
+      }
       case 'browser':
       default:
         return await this.initBrowser()
@@ -115,17 +122,43 @@ export class HybridEmulator {
     const initialized = await this.webvmEmuhub.init()
     if (!initialized) {
       console.warn('⚠️ WebVM + EmuHub not available, falling back to browser emulation')
+      // Switch mode to browser
+      this.mode = 'browser'
+      return await this.initBrowser()
+    }
+    
+    // Verify EmuHub is actually working by checking if we can get emulators
+    try {
+      const emulators = await this.webvmEmuhub.getEmulators()
+      if (emulators.length === 0) {
+        // Try to create one
+        const created = await this.webvmEmuhub.createEmulator({
+          androidVersion: '11',
+          deviceName: 'Pixel_5',
+          screenResolution: '1080x1920',
+        })
+        if (!created) {
+          console.warn('⚠️ Cannot create emulator, EmuHub may not be working. Falling back to browser.')
+          this.mode = 'browser'
+          return await this.initBrowser()
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ EmuHub error, falling back to browser:', error)
+      this.mode = 'browser'
       return await this.initBrowser()
     }
 
-    // Get or create an emulator
+    // Get or create an emulator (already done in verification above, but get it)
     console.log('📱 Getting or creating Android emulator...')
     let emulators: EmuHubEmulator[] = []
     
     try {
       emulators = await this.webvmEmuhub.getEmulators()
     } catch (error) {
-      console.warn('⚠️ Failed to get emulators, will create new one:', error)
+      console.warn('⚠️ Failed to get emulators, falling back to browser:', error)
+      this.mode = 'browser'
+      return await this.initBrowser()
     }
     
     if (emulators.length === 0) {
@@ -136,17 +169,15 @@ export class HybridEmulator {
           deviceName: 'Pixel_5',
           screenResolution: '1080x1920',
         })
-      } catch (error) {
-        console.warn('⚠️ Failed to create emulator via API, using default:', error)
-        // Create a default emulator object
-        this.currentEmulator = {
-          id: 'default',
-          name: 'Default Android Emulator',
-          status: 'running',
-          vncUrl: `${this.webvmEmuhub.getServerUrl()}/vnc/default`,
-          androidVersion: '11',
-          deviceName: 'Pixel_5',
+        if (!this.currentEmulator) {
+          console.warn('⚠️ Failed to create emulator, falling back to browser')
+          this.mode = 'browser'
+          return await this.initBrowser()
         }
+      } catch (error) {
+        console.warn('⚠️ Failed to create emulator via API, falling back to browser:', error)
+        this.mode = 'browser'
+        return await this.initBrowser()
       }
     } else {
       console.log(`📱 Found ${emulators.length} existing emulator(s), using first one`)
@@ -164,8 +195,9 @@ export class HybridEmulator {
       return true
     }
 
-    console.error('❌ Failed to get or create emulator')
-    return false
+    console.error('❌ Failed to get or create emulator, falling back to browser')
+    this.mode = 'browser'
+    return await this.initBrowser()
   }
 
   /**
