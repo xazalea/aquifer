@@ -6,7 +6,7 @@ import { HybridEmulator, EmulationMode } from './hybrid-emulator'
 
 interface VMInstance {
   canvas: HTMLCanvasElement
-  emulator: AndroidEmulator | null
+  emulator: HybridEmulator | AndroidEmulator | null
 }
 
 export function useAndroidVM() {
@@ -14,12 +14,20 @@ export function useAndroidVM() {
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
+  const [emulationMode, setEmulationMode] = useState<EmulationMode>('browser')
 
-  const initVM = useCallback((canvas: HTMLCanvasElement) => {
+  const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'browser') => {
     try {
       setError(null)
-      const emulator = new AndroidEmulator(canvas)
+      const emulator = new HybridEmulator(canvas, { mode }) // Use HybridEmulator with config
+      const initialized = await emulator.init() // Initialize the hybrid emulator
+      
+      if (!initialized) {
+        throw new Error('Failed to initialize emulator')
+      }
+      
       setVm({ canvas, emulator })
+      setEmulationMode(mode)
       
       // Simulate initialization delay (reduced for faster startup)
       setTimeout(() => {
@@ -33,11 +41,17 @@ export function useAndroidVM() {
     }
   }, [])
 
-  const startVM = useCallback(() => {
+  const startVM = useCallback(async () => {
     if (vm?.emulator) {
       try {
         setError(null)
-        vm.emulator.start()
+        const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
+        if (browserEmulator) {
+          browserEmulator.start()
+        } else {
+          // Try hybrid emulator start
+          await (vm.emulator as any).start?.()
+        }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to start VM'
         setError(errorMessage)
@@ -72,7 +86,7 @@ export function useAndroidVM() {
 
     try {
       const arrayBuffer = await file.arrayBuffer()
-      await vm.emulator.installAPK(arrayBuffer, file.name)
+      await (vm.emulator as any).installAPK(arrayBuffer, file.name)
       console.log('APK installed successfully')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to install APK'
@@ -84,18 +98,66 @@ export function useAndroidVM() {
     }
   }, [vm, isInstalling])
 
+  const launchApp = useCallback((packageName: string) => {
+    if (vm?.emulator) {
+      const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
+      if (browserEmulator) {
+        browserEmulator.launchApp(packageName)
+      } else {
+        // Try to launch via hybrid emulator
+        ;(vm.emulator as any).launchApp?.(packageName)
+      }
+    }
+  }, [vm])
+
+  const uninstallApp = useCallback((packageName: string) => {
+    if (vm?.emulator) {
+      const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
+      if (browserEmulator) {
+        browserEmulator.uninstallApp(packageName)
+      } else {
+        // Try to uninstall via hybrid emulator
+        ;(vm.emulator as any).uninstallApp?.(packageName)
+      }
+    }
+  }, [vm])
+
+  const getRunningApp = useCallback(() => {
+    if (vm?.emulator) {
+      const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
+      if (browserEmulator) {
+        return browserEmulator.getRunningApp()
+      }
+    }
+    return null
+  }, [vm])
+
   const installedApps = useMemo(() => {
-    return vm?.emulator?.getInstalledApps() || []
+    if (vm?.emulator) {
+      const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
+      if (browserEmulator) {
+        return browserEmulator.getInstalledApps()
+      }
+      // Try hybrid emulator
+      return (vm.emulator as any).getInstalledApps?.() || []
+    }
+    return []
   }, [vm])
 
   return {
-    vm: vm?.emulator || null,
+    vm: (vm?.emulator as any)?.getBrowserEmulator?.() || vm?.emulator || null, // Return browser emulator for direct access
+    hybridEmulator: vm?.emulator || null, // Also expose hybrid emulator
     initVM,
     startVM,
     installAPK,
+    launchApp,
+    uninstallApp,
+    getRunningApp,
     isReady,
     error,
     isInstalling,
     installedApps,
+    emulationMode, // Expose emulation mode
+    setEmulationMode, // Expose setter for emulation mode
   }
 }

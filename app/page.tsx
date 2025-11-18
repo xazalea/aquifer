@@ -14,8 +14,24 @@ export default function Home() {
   const [apkFile, setApkFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
+  const { 
+    installAPK, 
+    vm, 
+    installedApps, 
+    launchApp, 
+    uninstallApp, 
+    getRunningApp,
+    emulationMode: hookEmulationMode,
+    setEmulationMode: setHookEmulationMode
+  } = useAndroidVM()
   const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('browser')
-  const { installAPK, vm, installedApps } = useAndroidVM()
+  
+  // Sync emulation mode with hook
+  useEffect(() => {
+    if (hookEmulationMode !== emulationMode) {
+      setHookEmulationMode(emulationMode)
+    }
+  }, [emulationMode, hookEmulationMode, setHookEmulationMode])
 
   // Initialize app storage
   useEffect(() => {
@@ -63,17 +79,13 @@ export default function Home() {
         isInstalling={isInstalling}
         installedApps={installedApps}
         onLaunchApp={(packageName) => {
-          if (vm) {
-            vm.launchApp(packageName)
-          }
+          launchApp(packageName)
         }}
         onUninstallApp={(packageName) => {
-          if (vm) {
-            vm.uninstallApp(packageName)
-            setApkFile(null)
-          }
+          uninstallApp(packageName)
+          setApkFile(null)
         }}
-        runningAppPackage={vm?.getRunningApp()?.packageName || null}
+        runningAppPackage={getRunningApp()?.packageName || null}
         emulationMode={emulationMode}
         onEmulationModeChange={setEmulationMode}
         onInstallFromStore={handleInstallFromStore}

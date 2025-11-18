@@ -38,7 +38,15 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
 
   // Initialize hybrid emulator for WebVM + EmuHub mode
   useEffect(() => {
-    if (emulationMode === 'webvm-emuhub' && canvasRef.current && !hybridEmulatorRef.current) {
+    if (emulationMode === 'webvm-emuhub' && canvasRef.current) {
+      // Clean up previous hybrid emulator if switching modes
+      if (hybridEmulatorRef.current) {
+        hybridEmulatorRef.current.stop().catch(console.error)
+        hybridEmulatorRef.current = null
+        setVncUrl(null)
+      }
+      
+      // Create new hybrid emulator
       const hybrid = new HybridEmulator(canvasRef.current, { mode: 'webvm-emuhub' })
       hybridEmulatorRef.current = hybrid
       hybrid.init().then((success) => {
@@ -46,8 +54,18 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
           const vnc = hybrid.getVNCUrl()
           setVncUrl(vnc)
           console.log('WebVM + EmuHub initialized, VNC URL:', vnc)
+        } else {
+          console.warn('WebVM + EmuHub initialization failed, falling back to browser mode')
         }
-      }).catch(console.error)
+      }).catch((error) => {
+        console.error('WebVM + EmuHub initialization error:', error)
+        setVncUrl(null)
+      })
+    } else if (emulationMode !== 'webvm-emuhub' && hybridEmulatorRef.current) {
+      // Clean up hybrid emulator when switching away from webvm-emuhub
+      hybridEmulatorRef.current.stop().catch(console.error)
+      hybridEmulatorRef.current = null
+      setVncUrl(null)
     }
   }, [emulationMode])
 

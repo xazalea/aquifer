@@ -4,14 +4,14 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
   border-radius: 999px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .dynamicIsland.collapsed {
@@ -131,8 +131,32 @@
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+  background: rgba(30, 30, 30, 0.98);
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* Ensure text is readable in Dynamic Island */
+.expandedBody * {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.expandedBody h3,
+.expandedBody h4,
+.expandedBody p,
+.expandedBody span,
+.expandedBody label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.expandedBody button {
+  color: rgba(255, 255, 255, 0.95) !important;
+  background: rgba(59, 130, 246, 0.9) !important;
+}
+
+.expandedBody button:hover {
+  background: rgba(59, 130, 246, 1) !important;
+  color: rgba(255, 255, 255, 1) !important;
 }
 
 .expandedBody::-webkit-scrollbar {

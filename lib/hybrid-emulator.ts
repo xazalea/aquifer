@@ -208,8 +208,17 @@ export class HybridEmulator {
    * Switch emulation mode
    */
   async switchMode(newMode: EmulationMode): Promise<boolean> {
+    // Stop current emulation
     await this.stop()
+    
+    // Clear current state
+    this.currentEmulator = null
+    this.browserEmulator = null
+    
+    // Set new mode
     this.mode = newMode
+    
+    // Re-initialize with new mode
     return await this.init()
   }
 }

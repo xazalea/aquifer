@@ -348,31 +348,34 @@ export class AndroidEmulator {
     this.animationFrameId = requestAnimationFrame(render)
   }
 
-  private renderAppScreen() {
-    if (!this.runningApp) {
-      // Fallback if no app is running
-      const width = this.canvas.width
-      const height = this.canvas.height
-      this.ctx.clearRect(0, 0, width, height)
-      this.ctx.fillStyle = '#F5F5F5'
-      this.ctx.fillRect(0, 0, width, height)
-      this.ctx.fillStyle = '#333333'
-      this.ctx.font = '16px sans-serif'
-      this.ctx.textAlign = 'center'
-      this.ctx.fillText('No app running', width / 2, height / 2)
-      return
-    }
+      private renderAppScreen() {
+        if (!this.runningApp) {
+          // Fallback if no app is running
+          const width = this.canvas.width
+          const height = this.canvas.height
+          this.ctx.clearRect(0, 0, width, height)
+          this.ctx.fillStyle = '#F5F5F5'
+          this.ctx.fillRect(0, 0, width, height)
+          this.ctx.fillStyle = '#333333'
+          this.ctx.font = '16px sans-serif'
+          this.ctx.textAlign = 'center'
+          this.ctx.fillText('No app running', width / 2, height / 2)
+          return
+        }
 
-    // Render based on app type
-    if (this.isGame) {
-      // Game engine handles its own rendering
-      // The game loop is running independently
-      return
-    } else {
-      // Use Android View System to render the actual app UI
-      this.viewSystem.render()
-    }
-  }
+        // Render based on app type
+        if (this.isGame) {
+          // Game engine handles its own rendering
+          // The game loop is running independently
+          return
+        } else {
+          // Use Android View System to render the actual app UI
+          // Ensure view system has correct canvas dimensions
+          if (this.viewSystem) {
+            this.viewSystem.render()
+          }
+        }
+      }
 
   private clearScreen() {
     const width = this.canvas.width

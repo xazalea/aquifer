@@ -34,6 +34,7 @@ export class AndroidViewSystem {
   private currentActivity: Activity | null = null
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
+  public onRenderCallback?: () => void // Callback to trigger emulator redraw
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -160,16 +161,23 @@ export class AndroidViewSystem {
             textSize: 16,
             visible: true,
             enabled: true,
-            onClick: () => {
-              console.log('Button clicked!')
-              // Update the status text
-              const statusView = this.findView('status_text')
-              if (statusView) {
-                statusView.text = 'Button was clicked!'
-                // Re-render after update
-                this.render()
+            onClick: (() => {
+              const viewSystem = this
+              return () => {
+                console.log('Button clicked!')
+                // Update the status text
+                const statusView = viewSystem.findView('status_text')
+                if (statusView) {
+                  statusView.text = 'Button was clicked!'
+                  // Re-render after update
+                  viewSystem.render()
+                  // Trigger emulator redraw
+                  if ((viewSystem as any).onRenderCallback) {
+                    (viewSystem as any).onRenderCallback()
+                  }
+                }
               }
-            },
+            })(),
           },
         ],
       },
@@ -317,8 +325,15 @@ export class AndroidViewSystem {
     // Find the view that was touched
     const touchedView = this.findViewAt(x, y, this.currentActivity.views)
     if (touchedView && touchedView.enabled && touchedView.onClick) {
+      console.log('View touched:', touchedView.id, 'at', x, y)
       touchedView.onClick()
       this.render() // Re-render after click
+      // Trigger emulator redraw
+      if (this.onRenderCallback) {
+        this.onRenderCallback()
+      }
+    } else {
+      console.log('No clickable view at', x, y, 'touchedView:', touchedView?.id)
     }
   }
 
