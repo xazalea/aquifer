@@ -19,6 +19,17 @@ export function useAndroidVM() {
   const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'browser') => {
     try {
       setError(null)
+      setIsReady(false)
+      
+      // Clean up existing VM if switching modes
+      if (vm?.emulator) {
+        try {
+          await (vm.emulator as any).stop?.()
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+      
       const emulator = new HybridEmulator(canvas, { mode }) // Use HybridEmulator with config
       const initialized = await emulator.init() // Initialize the hybrid emulator
       
@@ -39,7 +50,7 @@ export function useAndroidVM() {
       setError(errorMessage)
       setIsReady(false)
     }
-  }, [])
+  }, [vm])
 
   const startVM = useCallback(async () => {
     if (vm?.emulator) {

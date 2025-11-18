@@ -39,6 +39,11 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
   // Initialize hybrid emulator for WebVM + EmuHub mode
   useEffect(() => {
     if (emulationMode === 'webvm-emuhub' && canvasRef.current) {
+      // Clean up browser VM if switching to WebVM+EmuHub
+      if (vm) {
+        console.log('Switching from browser to WebVM+EmuHub mode')
+      }
+      
       // Clean up previous hybrid emulator if switching modes
       if (hybridEmulatorRef.current) {
         hybridEmulatorRef.current.stop().catch(console.error)
@@ -54,12 +59,18 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
           const vnc = hybrid.getVNCUrl()
           setVncUrl(vnc)
           console.log('WebVM + EmuHub initialized, VNC URL:', vnc)
+          // Update VM state if needed
+          if (vmState === 'stopped') {
+            setVmState('running')
+          }
         } else {
           console.warn('WebVM + EmuHub initialization failed, falling back to browser mode')
+          setVmState('error')
         }
       }).catch((error) => {
         console.error('WebVM + EmuHub initialization error:', error)
         setVncUrl(null)
+        setVmState('error')
       })
     } else if (emulationMode !== 'webvm-emuhub' && hybridEmulatorRef.current) {
       // Clean up hybrid emulator when switching away from webvm-emuhub
@@ -67,12 +78,22 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
       hybridEmulatorRef.current = null
       setVncUrl(null)
     }
-  }, [emulationMode])
+  }, [emulationMode, vm, vmState, setVmState])
 
   // Initialize browser VM for browser mode
   useEffect(() => {
-    if (emulationMode === 'browser' && canvasRef.current && !vm) {
-      initVM(canvasRef.current)
+    if (emulationMode === 'browser' && canvasRef.current) {
+      // Clean up WebVM+EmuHub if switching to browser mode
+      if (hybridEmulatorRef.current) {
+        hybridEmulatorRef.current.stop().catch(console.error)
+        hybridEmulatorRef.current = null
+        setVncUrl(null)
+      }
+      
+      // Initialize browser VM with the correct mode
+      if (!vm) {
+        initVM(canvasRef.current, 'browser')
+      }
     }
   }, [vm, initVM, emulationMode])
 

@@ -169,12 +169,15 @@ export class AndroidViewSystem {
                 const statusView = viewSystem.findView('status_text')
                 if (statusView) {
                   statusView.text = 'Button was clicked!'
+                  statusView.textColor = '#2196F3'
                   // Re-render after update
                   viewSystem.render()
                   // Trigger emulator redraw
                   if ((viewSystem as any).onRenderCallback) {
                     (viewSystem as any).onRenderCallback()
                   }
+                } else {
+                  console.warn('Status text view not found!')
                 }
               }
             })(),
@@ -343,7 +346,7 @@ export class AndroidViewSystem {
   private findViewAt(x: number, y: number, views?: View[]): View | null {
     const searchViews = views || this.currentActivity?.views || []
     
-    // Search in reverse order (top to bottom)
+    // Search in reverse order (top to bottom) to find topmost view
     for (let i = searchViews.length - 1; i >= 0; i--) {
       const view = searchViews[i]
       if (!view.visible || !view.enabled) {
@@ -351,7 +354,7 @@ export class AndroidViewSystem {
       }
 
       // Check children first (they're on top)
-      if (view.children) {
+      if (view.children && view.children.length > 0) {
         const childView = this.findViewAt(x, y, view.children)
         if (childView) {
           return childView
@@ -359,13 +362,18 @@ export class AndroidViewSystem {
       }
 
       // Check if point is within view bounds
+      // For buttons, we want exact hit testing
       if (
         x >= view.x &&
         x <= view.x + view.width &&
         y >= view.y &&
         y <= view.y + view.height
       ) {
-        return view
+        // If this view has an onClick handler, return it
+        if (view.onClick) {
+          return view
+        }
+        // Otherwise, continue searching (might be a container)
       }
     }
 

@@ -583,16 +583,25 @@ export class AndroidEmulator {
   public handleTouch(x: number, y: number, type: 'start' | 'move' | 'end') {
     // Scale coordinates to match canvas resolution
     const rect = this.canvas.getBoundingClientRect()
-    const scaleX = this.canvas.width / rect.width
-    const scaleY = this.canvas.height / rect.height
+    const scaleX = this.canvas.width / (rect.width || this.canvas.width)
+    const scaleY = this.canvas.height / (rect.height || this.canvas.height)
 
     const scaledX = x * scaleX
     const scaledY = y * scaleY
 
+    console.log('Touch event:', type, 'at', x, y, 'scaled to', scaledX, scaledY, 'screen:', this.currentScreen, 'app:', this.runningApp?.packageName)
+
     // If app is running, use view system for touch handling
     if (this.currentScreen === 'app' && this.runningApp) {
+      console.log('Delegating touch to view system, current activity:', this.viewSystem.getCurrentActivity()?.packageName)
       this.viewSystem.handleTouch(scaledX, scaledY, type)
       this.needsRedraw = true
+      // Force immediate redraw
+      if (this.isRunning) {
+        requestAnimationFrame(() => {
+          this.renderAppScreen()
+        })
+      }
       return
     }
 
