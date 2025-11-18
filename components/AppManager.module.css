@@ -58,15 +58,14 @@
 .appItem {
   padding: 1rem;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.3);
+  border-radius: 6px;
+  background: hsl(var(--card));
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s ease;
 }
 
 .appItem:hover {
-  border-color: hsl(var(--primary));
-  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.5);
 }
 
 .appItemRunning {

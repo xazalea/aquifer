@@ -1,7 +1,7 @@
 .manager {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -38,8 +38,8 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  background: hsl(var(--muted) / 0.3);
-  border-radius: 8px;
+  background: hsl(var(--card));
+  border-radius: 6px;
   border: 1px solid hsl(var(--border));
 }
 
@@ -79,7 +79,7 @@
 
 .info {
   padding: 1rem;
-  background: hsl(var(--muted) / 0.3);
+  background: hsl(var(--card));
   border-radius: 6px;
   border: 1px solid hsl(var(--border));
 }

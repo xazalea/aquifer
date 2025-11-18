@@ -1,7 +1,7 @@
 .store {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -73,14 +73,13 @@
   gap: 0.75rem;
   padding: 1rem;
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  background: hsl(var(--muted) / 0.3);
-  transition: all 0.2s;
+  border-radius: 6px;
+  background: hsl(var(--card));
+  transition: border-color 0.2s ease;
 }
 
 .appCard:hover {
-  border-color: hsl(var(--primary));
-  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.5);
 }
 
 .appIcon {

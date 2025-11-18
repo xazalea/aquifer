@@ -1,7 +1,7 @@
 .panel {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -9,8 +9,7 @@
   height: fit-content;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
-  backdrop-blur: 10px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .section {
@@ -32,7 +31,8 @@
 .icon {
   width: 1.2rem;
   height: 1.2rem;
-  color: #667eea;
+  color: hsl(var(--foreground));
+  opacity: 0.7;
 }
 
 .buttonGroup {
@@ -63,34 +63,31 @@
 }
 
 .buttonPrimary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #3b82f6;
   color: white;
 }
 
 .buttonPrimary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: #2563eb;
 }
 
 .buttonDanger {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: #ef4444;
   color: white;
 }
 
 .buttonDanger:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+  background: #dc2626;
 }
 
 .buttonSecondary {
-  background: #2a2a2a;
-  color: white;
-  border: 1px solid #444;
+  background: transparent;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
 }
 
 .buttonSecondary:hover:not(:disabled) {
-  background: #333;
-  border-color: #555;
+  background: hsl(var(--muted));
 }
 
 .buttonIcon {

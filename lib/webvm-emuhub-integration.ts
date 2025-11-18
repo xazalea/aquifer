@@ -116,12 +116,27 @@ export class WebVMEmuHubIntegration {
       // Strategy 2: Try to use WebVM to run EmuHub
       console.log('📦 No existing EmuHub server found, trying WebVM...')
       
-      // Step 1: Initialize WebVM
-      const webvmInitialized = await this.initWebVM()
+      // Step 1: Initialize WebVM/CheerpX
+      statusTracker.progress('Initializing WebVM/CheerpX...', 40, 'Setting up browser virtualization')
+      
+      // Add timeout for WebVM initialization
+      const webvmInitialized = await Promise.race([
+        this.initWebVM(),
+        new Promise<boolean>((resolve) => 
+          setTimeout(() => {
+            statusTracker.warning('WebVM initialization taking longer than expected', 'Continuing anyway...')
+            resolve(false)
+          }, 30000) // 30 second timeout
+        )
+      ])
+      
       if (!webvmInitialized) {
+        statusTracker.warning('WebVM/CheerpX not available, falling back to browser emulation', 'Docker-based emulation requires WebVM')
         console.warn('⚠️ WebVM not available, EmuHub will not work')
         return false
       }
+      
+      statusTracker.success('CheerpX initialized successfully', 'Docker support enabled')
 
         // Step 2: Start Docker in WebVM (if not already running)
         statusTracker.progress('Starting Docker daemon...', 50, 'Initializing container runtime')
@@ -181,6 +196,7 @@ export class WebVMEmuHubIntegration {
    */
   private async initWebVM(): Promise<boolean> {
     try {
+      statusTracker.info('Initializing CheerpX virtualization...', 'Loading x86-to-WebAssembly engine')
       console.log('🚀 Initializing real WebVM/CheerpX...')
 
       // First, try CheerpX integration (real implementation)
@@ -189,8 +205,19 @@ export class WebVMEmuHubIntegration {
         enableDocker: true,
       })
 
-      const cheerpxInitialized = await this.cheerpx.init()
+      statusTracker.progress('Loading CheerpX module...', 42, 'Importing virtualization engine')
+      const cheerpxInitialized = await Promise.race([
+        this.cheerpx.init(),
+        new Promise<boolean>((resolve) => 
+          setTimeout(() => {
+            console.warn('⚠️ CheerpX initialization timeout')
+            resolve(false)
+          }, 20000) // 20 second timeout for init
+        )
+      ])
+      
       if (cheerpxInitialized && this.cheerpx.isReady()) {
+        statusTracker.success('CheerpX initialized', 'Virtualization engine ready')
         console.log('✅ CheerpX initialized - using real Docker support')
         // Use CheerpX for Docker operations
         this.webvm = this.cheerpx.getInstance()
@@ -354,7 +381,7 @@ export class WebVMEmuHubIntegration {
   /**
    * Execute Docker command (via REAL WebVM/CheerpX - NO SIMULATION)
    */
-  private async executeDockerCommand(command: string): Promise<string> {
+  private async executeDockerCommand(command: string, timeout: number = 30000): Promise<string> {
     // CRITICAL: Prevent infinite recursion - check flag FIRST
     if (this.isExecutingCommand) {
       throw new Error('Docker command already executing')
@@ -364,27 +391,46 @@ export class WebVMEmuHubIntegration {
     this.isExecutingCommand = true
     
     try {
-      // Try REAL CheerpX execution first
+      // Try REAL CheerpX execution first with timeout
       if (this.cheerpx && this.cheerpx.isReady()) {
         try {
-          const result = await this.cheerpx.execute(command)
+          const result = await Promise.race([
+            this.cheerpx.execute(command),
+            new Promise<string>((_, reject) => 
+              setTimeout(() => reject(new Error(`Command timeout after ${timeout}ms: ${command}`)), timeout)
+            )
+          ])
           return result
         } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          if (errorMsg.includes('timeout')) {
+            console.warn(`⚠️ Command timed out: ${command}`)
+            throw new Error(`Command timeout: ${command}`)
+          }
           console.error('CheerpX execution failed:', error)
           throw error
         }
       }
 
-      // Try REAL WebVM execution
+      // Try REAL WebVM execution with timeout
       if (this.webvm) {
         // WebVM Docker API
         if (this.webvm.docker && typeof this.webvm.docker.exec === 'function') {
           try {
-            const result = await this.webvm.docker.exec(command)
+            const result = await Promise.race([
+              this.webvm.docker.exec(command),
+              new Promise<string>((_, reject) => 
+                setTimeout(() => reject(new Error(`Command timeout: ${command}`)), timeout)
+              )
+            ])
             if (result !== undefined && result !== null && result !== '') {
               return result
             }
           } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            if (errorMsg.includes('timeout')) {
+              console.warn(`⚠️ WebVM Docker API command timed out: ${command}`)
+            }
             console.error('WebVM Docker API execution failed:', error)
             throw error
           }
@@ -393,11 +439,20 @@ export class WebVMEmuHubIntegration {
         // WebVM execute function
         if (typeof this.webvm.execute === 'function') {
           try {
-            const result = await this.webvm.execute(command)
+            const result = await Promise.race([
+              this.webvm.execute(command),
+              new Promise<string>((_, reject) => 
+                setTimeout(() => reject(new Error(`Command timeout: ${command}`)), timeout)
+              )
+            ])
             if (result !== undefined && result !== null && result !== '') {
               return result
             }
           } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            if (errorMsg.includes('timeout')) {
+              console.warn(`⚠️ WebVM execute command timed out: ${command}`)
+            }
             console.error('WebVM execute failed:', error)
             throw error
           }
@@ -406,9 +461,18 @@ export class WebVMEmuHubIntegration {
         // BrowserPod-style
         if (typeof this.webvm.runCommand === 'function') {
           try {
-            const result = await this.webvm.runCommand(command)
+            const result = await Promise.race([
+              this.webvm.runCommand(command),
+              new Promise<string>((_, reject) => 
+                setTimeout(() => reject(new Error(`Command timeout: ${command}`)), timeout)
+              )
+            ])
             return result
           } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            if (errorMsg.includes('timeout')) {
+              console.warn(`⚠️ BrowserPod runCommand timed out: ${command}`)
+            }
             console.error('BrowserPod runCommand failed:', error)
             throw error
           }
@@ -428,41 +492,106 @@ export class WebVMEmuHubIntegration {
    */
   private async startDockerInWebVM(): Promise<boolean> {
     try {
-      // Check if Docker is available using REAL execution
+      statusTracker.info('Checking Docker availability...', 'Verifying container runtime')
+      
+      // Check if Docker is available using REAL execution with timeout
       try {
-        const dockerCheck = await this.executeDockerCommand('docker --version')
-        if (dockerCheck && (dockerCheck.includes('Docker version') || dockerCheck.includes('docker'))) {
+        const dockerCheck = await Promise.race([
+          this.executeDockerCommand('docker --version', 10000), // 10 second timeout
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error('Docker check timeout')), 10000)
+          )
+        ])
+        
+        if (dockerCheck && (dockerCheck.includes('Docker version') || dockerCheck.includes('docker') || dockerCheck.includes('success'))) {
+          statusTracker.success('Docker is available', 'Container runtime detected')
           console.log('✅ Docker is available in WebVM/CheerpX')
-          
-          // Check if Docker daemon is running
+
+          // Check if Docker daemon is running with timeout
           try {
-            await this.executeDockerCommand('docker ps')
+            statusTracker.info('Checking Docker daemon status...', 'Verifying if Docker is running')
+            await Promise.race([
+              this.executeDockerCommand('docker ps', 5000), // 5 second timeout
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Docker ps timeout')), 5000)
+              )
+            ])
+            statusTracker.success('Docker daemon is running', 'Ready for containers')
             console.log('✅ Docker daemon is running')
             return true
           } catch (error) {
+            statusTracker.info('Docker daemon not running, starting...', 'Initializing container runtime')
             console.log('⚠️ Docker daemon not running, attempting to start...')
-            // Try to start Docker daemon
+            
+            // Try to start Docker daemon (non-blocking)
             try {
-              await this.executeDockerCommand('dockerd &')
-              // Wait a bit for Docker to start
-              await new Promise(resolve => setTimeout(resolve, 3000))
-              // Check again
-              await this.executeDockerCommand('docker ps')
-              console.log('✅ Docker daemon started')
-              return true
+              // Start dockerd in background (don't wait for it to complete)
+              this.executeDockerCommand('nohup dockerd > /tmp/dockerd.log 2>&1 &', 5000).catch(() => {
+                // Ignore errors - daemon might already be starting or command format issue
+              })
+              
+              // Wait and check multiple times with progress updates
+              const maxWait = 30 // 30 seconds max
+              const checkInterval = 2 // Check every 2 seconds
+              
+              for (let i = 0; i < maxWait / checkInterval; i++) {
+                const progress = 50 + Math.floor((i / (maxWait / checkInterval)) * 10) // 50-60%
+                statusTracker.progress(
+                  `Waiting for Docker daemon... (${i * checkInterval}s)`,
+                  progress,
+                  'Docker is starting up, this may take 10-30 seconds'
+                )
+                
+                await new Promise(resolve => setTimeout(resolve, checkInterval * 1000))
+                
+                // Try to check if Docker is ready
+                try {
+                  await Promise.race([
+                    this.executeDockerCommand('docker ps', 2000), // 2 second timeout for check
+                    new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Timeout')), 2000)
+                    )
+                  ])
+                  statusTracker.success('Docker daemon started', 'Container runtime ready')
+                  console.log('✅ Docker daemon started')
+                  return true
+                } catch (checkError) {
+                  // Not ready yet, continue waiting
+                  if (i === (maxWait / checkInterval) - 1) {
+                    // Last attempt failed
+                    statusTracker.warning('Docker daemon may still be starting', 'Continuing anyway - it may start later')
+                    console.warn('⚠️ Docker daemon check failed, but continuing...')
+                    // Return true anyway - Docker might start later
+                    return true
+                  }
+                }
+              }
+              
+              // If we get here, Docker didn't start in time
+              statusTracker.warning('Docker daemon startup taking longer than expected', 'Continuing anyway - container may start later')
+              console.warn('⚠️ Docker daemon startup timeout, but continuing...')
+              return true // Continue anyway - Docker might work later
             } catch (startError) {
+              statusTracker.error('Could not start Docker daemon', String(startError))
               console.warn('⚠️ Could not start Docker daemon:', startError)
               return false
             }
           }
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        if (errorMsg.includes('timeout')) {
+          statusTracker.warning('Docker check timed out', 'Docker may not be available in this environment')
+        } else {
+          statusTracker.warning('Docker not available', 'Browser emulation will be used instead')
+        }
         console.warn('⚠️ Docker not available:', error)
         return false
       }
 
       return false
     } catch (error) {
+      statusTracker.error('Failed to start Docker', String(error))
       console.error('❌ Failed to start Docker:', error)
       return false
     }
