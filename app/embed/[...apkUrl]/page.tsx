@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import styles from './EmbedPage.module.css'
 import { HybridEmulator } from '@/lib/hybrid-emulator'
 import { EmbedVNCViewer } from '@/components/EmbedVNCViewer'
+import { StatusDisplay } from '@/components/StatusDisplay'
+import { statusTracker } from '@/lib/status-tracker'
 
 export default function EmbedPage() {
   const params = useParams()
@@ -199,6 +201,11 @@ export default function EmbedPage() {
               {loadingProgress >= 70 && loadingProgress < 90 && 'Downloading APK...'}
               {loadingProgress >= 90 && 'Installing app...'}
             </div>
+          </div>
+          
+          {/* Real-time status display */}
+          <div className={styles.statusContainer}>
+            <StatusDisplay />
           </div>
         </div>
       )}

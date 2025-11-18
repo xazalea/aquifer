@@ -7,6 +7,8 @@
  * Documentation: https://leaningtech.com/cheerpx/
  */
 
+import { statusTracker } from './status-tracker'
+
 export interface CheerpXConfig {
   memorySize?: number
   enableDocker?: boolean
@@ -89,12 +91,14 @@ export class CheerpXIntegration {
             // Use WebVM's Debian disk image (same as WebVM uses)
             // This is a real ext2 filesystem with Linux installed
             const diskImageUrl = 'wss://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+            statusTracker.info('Loading Debian disk image...', 'Downloading Linux filesystem')
             console.log('📦 Loading Debian disk image from WebVM...')
             
             // Create block device from WebVM's disk image
             let blockDevice
             try {
               blockDevice = await CloudDevice.create(diskImageUrl)
+              statusTracker.success('Disk image loaded', 'Linux filesystem ready')
               console.log('✅ Disk image loaded')
             } catch (cloudError) {
               // Fallback to HTTP if WebSocket fails
@@ -135,6 +139,7 @@ export class CheerpXIntegration {
             
             // Create Linux VM with proper mounts
             this.linux = await Linux.create({ mounts: mountPoints })
+            statusTracker.success('CheerpX Linux VM created', 'Virtualization environment ready')
             console.log('✅ CheerpX Linux VM created with Debian filesystem')
             console.log('💡 You can now install Android emulator inside this Linux VM')
           }

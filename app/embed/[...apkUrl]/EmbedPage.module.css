@@ -127,6 +127,13 @@
   letter-spacing: 0.5px;
 }
 
+.statusContainer {
+  margin-top: 32px;
+  width: 100%;
+  max-width: 500px;
+  animation: fadeIn 0.5s ease-in 0.3s both;
+}
+
 .errorScreen {
   position: absolute;
   top: 0;

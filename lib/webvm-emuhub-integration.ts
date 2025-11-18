@@ -15,6 +15,7 @@
 
 import { EnhancedEmuHubIntegration, EmuHubEmulator } from './emuhub-integration-enhanced'
 import { CheerpXIntegration } from './cheerpx-integration'
+import { statusTracker } from './status-tracker'
 
 export interface WebVMEmuHubConfig {
   webvmMemorySize?: number
@@ -61,6 +62,7 @@ export class WebVMEmuHubIntegration {
    */
   async init(): Promise<boolean> {
     try {
+      statusTracker.info('Initializing WebVM + EmuHub integration...')
       console.log('🚀 Initializing WebVM + EmuHub integration...')
 
       // Strategy 1: Try to connect to existing EmuHub server first
@@ -71,6 +73,8 @@ export class WebVMEmuHubIntegration {
         'http://127.0.0.1:8000',
       ]
 
+      statusTracker.progress('Checking for existing EmuHub server...', 10)
+      
       for (const serverUrl of existingServerUrls) {
         this.emuhubServerUrl = serverUrl
         this.emuhub = new EnhancedEmuHubIntegration({
@@ -81,21 +85,33 @@ export class WebVMEmuHubIntegration {
           useWebVM: false,
         })
 
+        statusTracker.info(`Trying to connect to EmuHub at ${serverUrl}...`, 'Checking connection...')
         console.log(`🔍 Trying to connect to EmuHub at ${serverUrl}...`)
-        const connected = await this.emuhub.connect(3) // Quick check, 3 retries
         
-        if (connected) {
-          // Verify it's actually working by checking health
-          const healthOk = await this.verifyEmuHubHealth(3)
-          if (healthOk) {
-            console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
-            this.isInitialized = true
-            return true
-          } else {
-            console.warn(`⚠️ EmuHub at ${serverUrl} not responding to health checks`)
+        try {
+          const connected = await this.emuhub.connect(1) // Quick check, 1 retry
+          
+          if (connected) {
+            // Verify it's actually working by checking health
+            statusTracker.progress('Verifying EmuHub health...', 30)
+            const healthOk = await this.verifyEmuHubHealth(2)
+            if (healthOk) {
+              statusTracker.success(`Connected to existing EmuHub server at ${serverUrl}`)
+              console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
+              this.isInitialized = true
+              return true
+            } else {
+              statusTracker.warning(`EmuHub at ${serverUrl} not responding to health checks`)
+              console.warn(`⚠️ EmuHub at ${serverUrl} not responding to health checks`)
+            }
           }
+        } catch (error) {
+          // Silently continue to next URL - this is expected if server doesn't exist
+          continue
         }
       }
+      
+      statusTracker.info('No existing EmuHub server found, initializing WebVM...', 'Setting up browser-based emulation')
 
       // Strategy 2: Try to use WebVM to run EmuHub
       console.log('📦 No existing EmuHub server found, trying WebVM...')
@@ -107,40 +123,53 @@ export class WebVMEmuHubIntegration {
         return false
       }
 
-      // Step 2: Start Docker in WebVM (if not already running)
-      const dockerReady = await this.startDockerInWebVM()
-      if (!dockerReady) {
-        console.warn('⚠️ Docker not available in WebVM')
-        return false
-      }
-
-      // Step 3: Pull and start EmuHub container
-      const containerStarted = await this.startEmuHubContainer()
-      if (!containerStarted) {
-        console.warn('⚠️ Failed to start EmuHub container')
-        return false
-      }
-
-      // Step 4: Wait for EmuHub to be ready (longer wait for container startup)
-      await this.waitForEmuHubReady(30) // Wait up to 30 seconds
-
-      // Step 5: Connect EmuHub integration
-      const emuhubConnected = await this.emuhub.connect(10) // More retries for container startup
-      if (!emuhubConnected) {
-        console.warn('⚠️ EmuHub container started but not responding yet')
-        // Verify it actually works by checking health endpoint
-        const healthCheck = await this.verifyEmuHubHealth(10) // More attempts for real container
-        if (!healthCheck) {
-          console.warn('⚠️ EmuHub health check failed after container creation')
-          console.warn('💡 Container may still be starting. This is normal for first-time setup.')
-          // Don't fail immediately - give it more time for real containers
-          // The health check will be done again when trying to use EmuHub
+        // Step 2: Start Docker in WebVM (if not already running)
+        statusTracker.progress('Starting Docker daemon...', 50, 'Initializing container runtime')
+        const dockerReady = await this.startDockerInWebVM()
+        if (!dockerReady) {
+          statusTracker.warning('Docker not available in WebVM', 'Falling back to browser emulation')
+          console.warn('⚠️ Docker not available in WebVM')
+          return false
         }
-      }
+        
+        statusTracker.success('Docker daemon running', 'Container runtime ready')
 
-      this.isInitialized = true
-      console.log('✅ WebVM + EmuHub integration initialized successfully')
-      return true
+        // Step 3: Pull and start EmuHub container
+        statusTracker.progress('Starting EmuHub container...', 60, 'Pulling Android emulator image')
+        const containerStarted = await this.startEmuHubContainer()
+        if (!containerStarted) {
+          statusTracker.error('Failed to start EmuHub container', 'Check console for details')
+          console.warn('⚠️ Failed to start EmuHub container')
+          return false
+        }
+        
+        statusTracker.success('EmuHub container started', 'Android emulator initializing')
+
+        // Step 4: Wait for EmuHub to be ready (longer wait for container startup)
+        statusTracker.progress('Waiting for Android emulator to boot...', 70, 'This may take 30-60 seconds')
+        await this.waitForEmuHubReady(30) // Wait up to 30 seconds
+
+        // Step 5: Connect EmuHub integration
+        statusTracker.progress('Connecting to Android emulator...', 80, 'Establishing VNC connection')
+        const emuhubConnected = await this.emuhub.connect(10) // More retries for container startup
+        if (!emuhubConnected) {
+          statusTracker.warning('EmuHub container started but not responding yet', 'Container may still be initializing')
+          console.warn('⚠️ EmuHub container started but not responding yet')
+          // Verify it actually works by checking health endpoint
+          const healthCheck = await this.verifyEmuHubHealth(10) // More attempts for real container
+          if (!healthCheck) {
+            statusTracker.warning('EmuHub health check pending', 'Container may still be starting - this is normal for first-time setup')
+            console.warn('⚠️ EmuHub health check failed after container creation')
+            console.warn('💡 Container may still be starting. This is normal for first-time setup.')
+            // Don't fail immediately - give it more time for real containers
+            // The health check will be done again when trying to use EmuHub
+          }
+        }
+
+        statusTracker.success('WebVM + EmuHub integration ready', 'Android emulator is running')
+        this.isInitialized = true
+        console.log('✅ WebVM + EmuHub integration initialized successfully')
+        return true
     } catch (error) {
       console.error('❌ Failed to initialize WebVM + EmuHub:', error)
       return false
@@ -445,6 +474,7 @@ export class WebVMEmuHubIntegration {
    */
   private async startEmuHubContainer(): Promise<boolean> {
     try {
+      statusTracker.info('Checking for existing EmuHub container...', 'Looking for running containers')
       console.log('Starting EmuHub container in WebVM...')
 
       // Use CheerpX Docker API if available
@@ -462,20 +492,22 @@ export class WebVMEmuHubIntegration {
           } else {
             // Create and start new container using CheerpX
             console.log('📦 Creating new EmuHub container in CheerpX...')
-            const containerId = await this.cheerpx.dockerRun(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
-              name: 'emuhub',
-              privileged: true,
-              env: {
-                VNCPASS: this.config.vncPassword || 'admin',
-                emuhubPASS: this.config.emuhubPassword || 'admin',
-                LISTENPORT: (this.config.emuhubPort || 8000).toString(),
-              },
-              ports: {
-                [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
-              },
-            })
-            this.dockerContainerId = containerId.trim()
-            console.log('✅ EmuHub container created:', this.dockerContainerId)
+                statusTracker.progress('Pulling EmuHub Docker image...', 65, 'Downloading Android emulator (this may take 1-2 minutes)')
+                const containerId = await this.cheerpx.dockerRun(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
+                  name: 'emuhub',
+                  privileged: true,
+                  env: {
+                    VNCPASS: this.config.vncPassword || 'admin',
+                    emuhubPASS: this.config.emuhubPassword || 'admin',
+                    LISTENPORT: (this.config.emuhubPort || 8000).toString(),
+                  },
+                  ports: {
+                    [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
+                  },
+                })
+                this.dockerContainerId = containerId.trim()
+                statusTracker.success('EmuHub container created', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+                console.log('✅ EmuHub container created:', this.dockerContainerId)
           }
         } catch (error) {
           console.error('❌ CheerpX Docker API failed:', error)
@@ -499,20 +531,22 @@ export class WebVMEmuHubIntegration {
           } else {
             // Create and start new container using WebVM Docker API
             console.log('📦 Creating new EmuHub container in WebVM...')
-            const containerId = await this.webvm.docker.run(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
-              name: 'emuhub',
-              privileged: true,
-              env: {
-                VNCPASS: this.config.vncPassword || 'admin',
-                emuhubPASS: this.config.emuhubPassword || 'admin',
-                LISTENPORT: (this.config.emuhubPort || 8000).toString(),
-              },
-              ports: {
-                [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
-              },
-            })
-            this.dockerContainerId = containerId || null
-            console.log('✅ EmuHub container created in WebVM:', this.dockerContainerId)
+                statusTracker.progress('Pulling EmuHub Docker image...', 65, 'Downloading Android emulator (this may take 1-2 minutes)')
+                const containerId = await this.webvm.docker.run(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
+                  name: 'emuhub',
+                  privileged: true,
+                  env: {
+                    VNCPASS: this.config.vncPassword || 'admin',
+                    emuhubPASS: this.config.emuhubPassword || 'admin',
+                    LISTENPORT: (this.config.emuhubPort || 8000).toString(),
+                  },
+                  ports: {
+                    [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
+                  },
+                })
+                this.dockerContainerId = containerId || null
+                statusTracker.success('EmuHub container created', `Container ID: ${this.dockerContainerId?.substring(0, 12) || 'unknown'}...`)
+                console.log('✅ EmuHub container created in WebVM:', this.dockerContainerId)
           }
         } catch (error) {
           console.error('❌ WebVM Docker API failed:', error)
@@ -545,9 +579,11 @@ export class WebVMEmuHubIntegration {
               -p ${this.config.emuhubPort || 8000}:${this.config.emuhubPort || 8000}/tcp \
               ${this.config.emuhubImage || 'mohamedhelmy/emuhub:latest'}`
 
-            const containerId = await this.executeDockerCommand(dockerCommand)
-            this.dockerContainerId = containerId.trim()
-            console.log('✅ EmuHub container created (REAL):', this.dockerContainerId)
+                statusTracker.progress('Pulling EmuHub Docker image...', 65, 'Downloading Android emulator (this may take 1-2 minutes)')
+                const containerId = await this.executeDockerCommand(dockerCommand)
+                this.dockerContainerId = containerId.trim()
+                statusTracker.success('EmuHub container created', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+                console.log('✅ EmuHub container created (REAL):', this.dockerContainerId)
           }
         } catch (error) {
           console.error('❌ Failed to create EmuHub container (REAL Docker):', error)
@@ -617,6 +653,13 @@ export class WebVMEmuHubIntegration {
     console.log(`⏳ Waiting for EmuHub to be ready (max ${maxAttempts} attempts)...`)
     
     for (let i = 0; i < maxAttempts; i++) {
+      const progress = 70 + Math.floor((i / maxAttempts) * 20) // 70-90%
+      statusTracker.progress(
+        `Waiting for Android emulator to boot... (${i + 1}/${maxAttempts})`,
+        progress,
+        'EmuHub container is starting up'
+      )
+      
       try {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 2000)
@@ -629,12 +672,13 @@ export class WebVMEmuHubIntegration {
 
           if (response.ok) {
             clearTimeout(timeoutId)
+            statusTracker.success('Android emulator is ready', `Booted successfully after ${i + 1} attempts`)
             console.log(`✅ EmuHub is ready after ${i + 1} attempts`)
             return
           }
         } catch (fetchError) {
           clearTimeout(timeoutId)
-          // Connection refused is expected if EmuHub isn't running yet
+          // Connection refused is expected if EmuHub isn't running yet - don't log as error
         }
       } catch (error) {
         // Continue waiting
@@ -642,12 +686,14 @@ export class WebVMEmuHubIntegration {
 
       if (i < maxAttempts - 1) {
         if (i % 5 === 0) {
+          statusTracker.info(`Still waiting for emulator... (${i + 1}/${maxAttempts} attempts)`, 'This is normal for first-time setup')
           console.log(`⏳ Still waiting... (${i + 1}/${maxAttempts})`)
         }
         await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
     
+    statusTracker.warning('EmuHub did not become ready in time', 'Continuing anyway - container may still be starting')
     console.warn('⚠️ EmuHub did not become ready in time, but continuing...')
   }
 

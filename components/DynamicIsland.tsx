@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { ControlPanel } from '@/components/ControlPanel'
 import { AppStore } from '@/components/AppStore'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { StatusDisplay } from '@/components/StatusDisplay'
+import { statusTracker, StatusUpdate } from '@/lib/status-tracker'
 import styles from './DynamicIsland.module.css'
 
 interface DynamicIslandProps {
@@ -48,7 +50,27 @@ export function DynamicIsland({
 }: DynamicIslandProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'controls' | 'store'>('controls')
+  const [currentStatus, setCurrentStatus] = useState<StatusUpdate | null>(null)
   const islandRef = useRef<HTMLDivElement>(null)
+
+  // Subscribe to status updates
+  useEffect(() => {
+    const unsubscribe = statusTracker.subscribe((update) => {
+      setCurrentStatus(update)
+      // Auto-expand on important status updates
+      if (update.type === 'error' || update.type === 'progress') {
+        setIsExpanded(true)
+      }
+    })
+
+    // Get initial status
+    const initial = statusTracker.getCurrentStatus()
+    if (initial) {
+      setCurrentStatus(initial)
+    }
+
+    return unsubscribe
+  }, [])
 
   // Auto-expand on important events
   useEffect(() => {
@@ -90,8 +112,16 @@ export function DynamicIsland({
         <div className={styles.statusIndicator}>
           <div className={`${styles.statusDot} ${styles[`status${vmState.charAt(0).toUpperCase() + vmState.slice(1)}`]}`} />
           <span className={styles.statusText}>
-            {vmState === 'running' ? 'Running' : vmState === 'starting' ? 'Starting...' : 'Stopped'}
+            {currentStatus?.message || (vmState === 'running' ? 'Running' : vmState === 'starting' ? 'Starting...' : 'Stopped')}
           </span>
+          {currentStatus?.progress !== undefined && (
+            <div className={styles.miniProgress}>
+              <div 
+                className={styles.miniProgressBar}
+                style={{ width: `${currentStatus.progress}%` }}
+              />
+            </div>
+          )}
         </div>
         <button
           className={styles.expandButton}
@@ -117,6 +147,13 @@ export function DynamicIsland({
           </div>
 
           <div className={styles.expandedBody}>
+            {/* Status Display */}
+            {currentStatus && (
+              <div className={styles.statusSection}>
+                <StatusDisplay />
+              </div>
+            )}
+            
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'controls' | 'store')} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="controls">Controls</TabsTrigger>
