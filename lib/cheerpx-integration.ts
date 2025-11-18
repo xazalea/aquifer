@@ -72,11 +72,11 @@ export class CheerpXIntegration {
         this.isInitialized = true
         console.log('✅ CheerpX module loaded successfully')
         
-        // Create Linux VM instance for command execution
+        // Create Linux VM instance with REAL disk image (like WebVM does)
         // Note: This requires Cross-Origin Isolation headers (COEP/COOP)
         try {
-          const { Linux, DataDevice } = this.cheerpx
-          if (Linux && DataDevice) {
+          const { Linux, CloudDevice, HttpBytesDevice, IDBDevice, OverlayDevice, WebDevice, DataDevice } = this.cheerpx
+          if (Linux) {
             // Check if Cross-Origin Isolation is enabled
             if (typeof window !== 'undefined' && !window.crossOriginIsolated) {
               console.warn('⚠️ Cross-Origin Isolation not enabled. CheerpX requires COEP/COOP headers.')
@@ -86,24 +86,74 @@ export class CheerpXIntegration {
               // Don't fail, but note that VM creation will fail
             }
             
-            this.linux = await Linux.create({
-              mounts: [
-                // Basic filesystem setup - can be extended for Docker
-                { type: 'ext2', dev: await DataDevice.create(), path: '/' }
-              ]
-            })
-            console.log('✅ CheerpX Linux VM created')
+            // Use WebVM's Debian disk image (same as WebVM uses)
+            // This is a real ext2 filesystem with Linux installed
+            const diskImageUrl = 'wss://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+            console.log('📦 Loading Debian disk image from WebVM...')
+            
+            // Create block device from WebVM's disk image
+            let blockDevice
+            try {
+              blockDevice = await CloudDevice.create(diskImageUrl)
+              console.log('✅ Disk image loaded')
+            } catch (cloudError) {
+              // Fallback to HTTP if WebSocket fails
+              console.log('⚠️ Cloud device failed, trying HTTP...')
+              const httpUrl = diskImageUrl.replace('wss://', 'https://').replace('ws://', 'http://')
+              blockDevice = await HttpBytesDevice.create(httpUrl)
+              console.log('✅ Disk image loaded via HTTP')
+            }
+            
+            // Create cache for overlay (allows writes)
+            const blockCache = await IDBDevice.create('aquifer-vm-cache')
+            const overlayDevice = await OverlayDevice.create(blockDevice, blockCache)
+            
+            // Create additional devices
+            const webDevice = await WebDevice.create('')
+            const documentsDevice = await WebDevice.create('documents')
+            const dataDevice = await DataDevice.create()
+            
+            // Mount points (same as WebVM)
+            const mountPoints = [
+              // The root filesystem, as an Ext2 image
+              { type: 'ext2', dev: overlayDevice, path: '/' },
+              // Access to files on the Web server
+              { type: 'dir', dev: webDevice, path: '/web' },
+              // Access to read-only data coming from JavaScript
+              { type: 'dir', dev: dataDevice, path: '/data' },
+              // Automatically created device files
+              { type: 'devs', path: '/dev' },
+              // Pseudo-terminals
+              { type: 'devpts', path: '/dev/pts' },
+              // The Linux 'proc' filesystem
+              { type: 'proc', path: '/proc' },
+              // The Linux 'sysfs' filesystem
+              { type: 'sys', path: '/sys' },
+              // Documents directory
+              { type: 'dir', dev: documentsDevice, path: '/home/user/documents' }
+            ]
+            
+            // Create Linux VM with proper mounts
+            this.linux = await Linux.create({ mounts: mountPoints })
+            console.log('✅ CheerpX Linux VM created with Debian filesystem')
+            console.log('💡 You can now install Android emulator inside this Linux VM')
           }
         } catch (vmError) {
           const errorMsg = vmError instanceof Error ? vmError.message : String(vmError)
+          console.error('❌ Failed to create Linux VM:', errorMsg)
+          
           if (errorMsg.includes('SharedArrayBuffer') || errorMsg.includes('crossOriginIsolated')) {
             console.error('❌ CheerpX requires Cross-Origin Isolation headers')
             console.error('💡 Add to your server/Next.js config:')
             console.error('   - Cross-Origin-Opener-Policy: same-origin')
             console.error('   - Cross-Origin-Embedder-Policy: require-corp')
             console.error('   - Cross-Origin-Resource-Policy: cross-origin')
+          } else if (errorMsg.includes('mount') || errorMsg.includes('Device does not exist')) {
+            console.error('❌ Disk image mount failed')
+            console.error('💡 This usually means the disk image URL is not accessible')
+            console.error('💡 Or Cross-Origin Isolation is not properly configured')
           } else {
-            console.warn('⚠️ Could not create Linux VM yet, will create on demand:', vmError)
+            console.warn('⚠️ Could not create Linux VM:', vmError)
           }
         }
         
@@ -168,29 +218,36 @@ export class CheerpXIntegration {
   }
 
   /**
-   * Execute a command in CheerpX
+   * Execute a command in CheerpX Linux VM
    */
   async execute(command: string): Promise<string> {
     if (!this.isInitialized || !this.cheerpx) {
       throw new Error('CheerpX not initialized')
     }
 
-    // WebVM-style execution
-    if (this.cheerpx.execute) {
-      return await this.cheerpx.execute(command)
+    // Ensure Linux VM is created
+    if (!this.linux) {
+      throw new Error('Linux VM not created. Call init() first and wait for VM creation.')
     }
 
-    // BrowserPod-style execution
-    if (this.cheerpx.runCommand) {
-      return await this.cheerpx.runCommand(command)
-    }
-
-    // Direct execution
-    if (typeof this.cheerpx === 'object' && this.cheerpx.terminal) {
-      return await this.cheerpx.terminal.execute(command)
-    }
-
-    throw new Error('CheerpX execution method not available')
+    // Execute command in Linux VM
+    // Note: CheerpX's run() returns { status }, not stdout
+    // For Docker commands, we'll need to capture output differently
+    const parts = command.trim().split(/\s+/)
+    const cmd = parts[0]
+    const args = parts.slice(1)
+    
+    const result = await this.linux.run(cmd, args, {
+      env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/bash', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+      cwd: '/home/user',
+      uid: 1000,
+      gid: 1000
+    })
+    
+    // CheerpX doesn't return stdout directly, so we'll return status
+    // For actual output, we'd need to redirect to a file and read it
+    // Or use a console callback to capture output
+    return result.status === 0 ? 'success' : `error: exit code ${result.status}`
   }
 
   /**

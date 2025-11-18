@@ -12,6 +12,7 @@
 import { AndroidEmulator } from './android-emulator'
 import { WebVMEmuHubIntegration } from './webvm-emuhub-integration'
 import { EmuHubEmulator } from './emuhub-integration-enhanced'
+import { OptimizedAndroidVM } from './android-vm-optimized'
 
 export type EmulationMode = 'browser' | 'webvm-emuhub' | 'auto'
 
@@ -34,6 +35,7 @@ export class HybridEmulator {
   private webvmEmuhub: WebVMEmuHubIntegration
   private currentEmulator: EmuHubEmulator | null = null
   private canvas: HTMLCanvasElement | null = null
+  private optimizedAndroid: OptimizedAndroidVM | null = null
 
   constructor(canvas: HTMLCanvasElement, config?: Partial<HybridEmulatorConfig>) {
     this.canvas = canvas
@@ -60,20 +62,47 @@ export class HybridEmulator {
       console.log('Auto-selected mode:', this.mode)
     }
 
-    switch (this.mode) {
-      case 'webvm-emuhub': {
-        const originalMode = this.mode
-        const result = await this.initWebVMEmuHub()
-        // If initWebVMEmuHub switched to browser mode, use that
-        if (this.mode !== originalMode && this.mode === 'browser') {
-          return await this.initBrowser()
+      switch (this.mode) {
+        case 'webvm-emuhub': {
+          // Try optimized Android VM first (fastest method)
+          console.log('⚡ Trying optimized Android VM (fastest method)...')
+          try {
+            this.optimizedAndroid = new OptimizedAndroidVM({
+              androidVersion: '9', // Fastest version
+              memorySize: 1536, // 1.5GB for speed
+              enableAcceleration: true,
+              enableGraphics: true,
+            })
+            
+            const androidReady = await this.optimizedAndroid.init()
+            if (androidReady) {
+              console.log('✅ Using optimized Android VM (fastest)')
+              const started = await this.optimizedAndroid.start()
+              if (started) {
+                // Optimized Android VM is running
+                // We'll use VNC to display it (via NoVNC or similar)
+                console.log('✅ Optimized Android VM started successfully!')
+                console.log('💡 VNC URL:', this.optimizedAndroid.getVNCUrl())
+                return true
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Optimized Android VM failed, trying EmuHub...', error)
+          }
+          
+          // Fallback to EmuHub
+          const originalMode = this.mode
+          const result = await this.initWebVMEmuHub()
+          // If initWebVMEmuHub switched to browser mode, use that
+          if (this.mode !== originalMode && this.mode === 'browser') {
+            return await this.initBrowser()
+          }
+          return result
         }
-        return result
+        case 'browser':
+        default:
+          return await this.initBrowser()
       }
-      case 'browser':
-      default:
-        return await this.initBrowser()
-    }
   }
 
   /**
@@ -228,6 +257,10 @@ export class HybridEmulator {
         }
         break
       case 'webvm-emuhub':
+        // Stop optimized Android VM if running
+        if (this.optimizedAndroid) {
+          await this.optimizedAndroid.stop()
+        }
         // Stop EmuHub container in WebVM
         await this.webvmEmuhub.stop()
         break
@@ -260,9 +293,15 @@ export class HybridEmulator {
   }
 
   /**
-   * Get VNC URL (for WebVM + EmuHub mode)
+   * Get VNC URL (for WebVM + EmuHub mode or Optimized Android)
    */
   getVNCUrl(): string | null {
+    // Check optimized Android VM first (fastest)
+    if (this.optimizedAndroid) {
+      const vncUrl = this.optimizedAndroid.getVNCUrl()
+      if (vncUrl) return vncUrl
+    }
+    
     if (this.mode === 'webvm-emuhub') {
       if (this.currentEmulator) {
         const url = this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
@@ -288,6 +327,24 @@ export class HybridEmulator {
    * Wait for VNC URL to be available (async)
    */
   async waitForVNCUrl(maxWait: number = 60000): Promise<string | null> {
+    // Check optimized Android VM first (fastest)
+    if (this.optimizedAndroid) {
+      const startTime = Date.now()
+      while (Date.now() - startTime < maxWait) {
+        const isRunning = await this.optimizedAndroid.isRunning()
+        if (isRunning) {
+          const vncUrl = this.optimizedAndroid.getVNCUrl()
+          if (vncUrl) {
+            console.log('✅ Optimized Android VNC URL obtained')
+            return vncUrl
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+      // Return URL anyway if Android VM exists
+      return this.optimizedAndroid.getVNCUrl()
+    }
+    
     if (this.mode !== 'webvm-emuhub') {
       return null
     }
