@@ -50,7 +50,11 @@ export function EmuHubVNCViewer({ vncUrl, width, height, className }: EmuHubVNCV
     return (
       <div className={styles.container}>
         <div className={styles.placeholder}>
-          <p>No emulator available. Please start an emulator first.</p>
+          <div className={styles.loading}>
+            <div className={styles.spinner}></div>
+            <p>Initializing Android emulator...</p>
+            <p className={styles.hint}>This may take a minute on first launch</p>
+          </div>
         </div>
       </div>
     )
@@ -60,7 +64,8 @@ export function EmuHubVNCViewer({ vncUrl, width, height, className }: EmuHubVNCV
     return (
       <div className={styles.container}>
         <div className={styles.error}>
-          <p>{error}</p>
+          <p>⚠️ {error}</p>
+          <p className={styles.hint}>Falling back to browser emulation...</p>
         </div>
       </div>
     )

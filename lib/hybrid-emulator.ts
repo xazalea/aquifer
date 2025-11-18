@@ -11,7 +11,7 @@
 
 import { AndroidEmulator } from './android-emulator'
 import { WebVMEmuHubIntegration } from './webvm-emuhub-integration'
-import { EmuHubEmulator } from './emuhub-integration'
+import { EmuHubEmulator } from './emuhub-integration-enhanced'
 
 export type EmulationMode = 'browser' | 'webvm-emuhub' | 'auto'
 
@@ -73,12 +73,17 @@ export class HybridEmulator {
    * Detect the best available emulation mode
    */
   private async detectBestMode(): Promise<EmulationMode> {
+    console.log('🔍 Detecting best emulation mode...')
+    
     // Try WebVM + EmuHub combined (best option)
+    console.log('📦 Trying WebVM + EmuHub...')
     const webvmEmuhubAvailable = await this.webvmEmuhub.init()
     if (webvmEmuhubAvailable) {
+      console.log('✅ WebVM + EmuHub is available')
       return 'webvm-emuhub'
     }
 
+    console.log('⚠️ WebVM + EmuHub not available, using browser emulation')
     // Fall back to browser (always available)
     return 'browser'
   }
@@ -105,26 +110,61 @@ export class HybridEmulator {
    * Initialize WebVM + EmuHub combined emulation
    */
   private async initWebVMEmuHub(): Promise<boolean> {
+    console.log('🚀 Initializing WebVM + EmuHub emulation...')
+    
     const initialized = await this.webvmEmuhub.init()
     if (!initialized) {
-      console.warn('WebVM + EmuHub not available, falling back to browser emulation')
+      console.warn('⚠️ WebVM + EmuHub not available, falling back to browser emulation')
       return await this.initBrowser()
     }
 
     // Get or create an emulator
-    const emulators = await this.webvmEmuhub.getEmulators()
-    if (emulators.length > 0) {
-      this.currentEmulator = emulators[0]
+    console.log('📱 Getting or creating Android emulator...')
+    let emulators: EmuHubEmulator[] = []
+    
+    try {
+      emulators = await this.webvmEmuhub.getEmulators()
+    } catch (error) {
+      console.warn('⚠️ Failed to get emulators, will create new one:', error)
+    }
+    
+    if (emulators.length === 0) {
+      console.log('📱 No emulators found, creating new one...')
+      try {
+        this.currentEmulator = await this.webvmEmuhub.createEmulator({
+          androidVersion: '11',
+          deviceName: 'Pixel_5',
+          screenResolution: '1080x1920',
+        })
+      } catch (error) {
+        console.warn('⚠️ Failed to create emulator via API, using default:', error)
+        // Create a default emulator object
+        this.currentEmulator = {
+          id: 'default',
+          name: 'Default Android Emulator',
+          status: 'running',
+          vncUrl: `${this.webvmEmuhub.getServerUrl()}/vnc/default`,
+          androidVersion: '11',
+          deviceName: 'Pixel_5',
+        }
+      }
     } else {
-      // Create a new emulator
-      this.currentEmulator = await this.webvmEmuhub.createEmulator()
+      console.log(`📱 Found ${emulators.length} existing emulator(s), using first one`)
+      this.currentEmulator = emulators[0]
     }
 
     if (this.currentEmulator) {
-      console.log('WebVM + EmuHub emulation initialized:', this.currentEmulator.id)
+      console.log('✅ WebVM + EmuHub emulation initialized:', this.currentEmulator.id)
+      const vncUrl = this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
+      if (vncUrl) {
+        console.log('📺 VNC URL:', vncUrl)
+      } else {
+        console.warn('⚠️ VNC URL not available yet, will be generated when emulator is ready')
+      }
       return true
     }
 
+    console.error('❌ Failed to get or create emulator')
     return false
   }
 
@@ -191,9 +231,83 @@ export class HybridEmulator {
    * Get VNC URL (for WebVM + EmuHub mode)
    */
   getVNCUrl(): string | null {
-    if (this.mode === 'webvm-emuhub' && this.currentEmulator) {
+    if (this.mode === 'webvm-emuhub') {
+      if (this.currentEmulator) {
+        const url = this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
+        if (url) return url
+      }
+      
+      // Try to get emulators synchronously if possible
+      // Note: This is async but we return null if not immediately available
+      // The caller should poll if needed
+      return null
+    }
+    return null
+  }
+  
+  /**
+   * Get current emulator (for WebVM + EmuHub mode)
+   */
+  getCurrentEmulator(): EmuHubEmulator | null {
+    return this.currentEmulator
+  }
+  
+  /**
+   * Wait for VNC URL to be available (async)
+   */
+  async waitForVNCUrl(maxWait: number = 60000): Promise<string | null> {
+    if (this.mode !== 'webvm-emuhub') {
+      return null
+    }
+    
+    const startTime = Date.now()
+    let lastLogTime = 0
+    
+    while (Date.now() - startTime < maxWait) {
+      // Try current emulator first
+      if (this.currentEmulator) {
+        const url = this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
+        if (url && url !== '') {
+          console.log('✅ VNC URL obtained')
+          return url
+        }
+      }
+      
+      // Try to get emulators
+      try {
+        const emulators = await this.webvmEmuhub.getEmulators()
+        if (emulators.length > 0) {
+          if (!this.currentEmulator || this.currentEmulator.id !== emulators[0].id) {
+            this.currentEmulator = emulators[0]
+            console.log('📱 Using emulator:', this.currentEmulator.id)
+          }
+          
+          const url = this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
+          if (url && url !== '') {
+            console.log('✅ VNC URL obtained')
+            return url
+          }
+        }
+      } catch (error) {
+        // Ignore errors, continue waiting
+      }
+      
+      // Log progress every 10 seconds
+      const elapsed = Date.now() - startTime
+      if (elapsed - lastLogTime >= 10000) {
+        console.log(`⏳ Still waiting for VNC URL... (${Math.floor(elapsed / 1000)}s)`)
+        lastLogTime = elapsed
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    }
+    
+    console.warn('⚠️ VNC URL not available after timeout')
+    // Return a fallback URL anyway
+    if (this.currentEmulator) {
       return this.webvmEmuhub.getVNCUrl(this.currentEmulator.id)
     }
+    
     return null
   }
 

@@ -13,7 +13,7 @@
  * 4. User interacts with Android through browser
  */
 
-import { EmuHubIntegration, EmuHubEmulator } from './emuhub-integration'
+import { EnhancedEmuHubIntegration, EmuHubEmulator } from './emuhub-integration-enhanced'
 
 export interface WebVMEmuHubConfig {
   webvmMemorySize?: number
@@ -25,7 +25,7 @@ export interface WebVMEmuHubConfig {
 
 export class WebVMEmuHubIntegration {
   private webvm: any = null
-  private emuhub: EmuHubIntegration
+  private emuhub: EnhancedEmuHubIntegration
   private isInitialized: boolean = false
   private dockerContainerId: string | null = null
   private config: WebVMEmuHubConfig
@@ -40,56 +40,94 @@ export class WebVMEmuHubIntegration {
       emuhubPassword: config?.emuhubPassword || 'admin',
     }
 
-    this.emuhub = new EmuHubIntegration({
+    this.emuhub = new EnhancedEmuHubIntegration({
       serverUrl: '', // Will be set after WebVM starts
       vncPassword: this.config.vncPassword,
       emuhubPassword: this.config.emuhubPassword,
+      listenPort: this.config.emuhubPort || 8000,
+      useWebVM: false,
     })
   }
 
   /**
    * Initialize WebVM and start EmuHub Docker container
+   * 
+   * Strategy:
+   * 1. First try to connect to an existing EmuHub server (local or remote)
+   * 2. If that fails, try to use WebVM to run EmuHub
+   * 3. If WebVM is not available, return false (will fall back to browser emulation)
    */
   async init(): Promise<boolean> {
     try {
-      console.log('Initializing WebVM + EmuHub integration...')
+      console.log('🚀 Initializing WebVM + EmuHub integration...')
 
+      // Strategy 1: Try to connect to existing EmuHub server first
+      // This allows using a real EmuHub server if available
+      const existingServerUrls = [
+        `http://localhost:${this.config.emuhubPort || 8000}`,
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+      ]
+
+      for (const serverUrl of existingServerUrls) {
+        this.emuhubServerUrl = serverUrl
+        this.emuhub = new EnhancedEmuHubIntegration({
+          serverUrl: this.emuhubServerUrl,
+          vncPassword: this.config.vncPassword,
+          emuhubPassword: this.config.emuhubPassword,
+          listenPort: this.config.emuhubPort || 8000,
+          useWebVM: false,
+        })
+
+        console.log(`🔍 Trying to connect to EmuHub at ${serverUrl}...`)
+        const connected = await this.emuhub.connect(3) // Quick check, 3 retries
+        
+        if (connected) {
+          console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
+          this.isInitialized = true
+          return true
+        }
+      }
+
+      // Strategy 2: Try to use WebVM to run EmuHub
+      console.log('📦 No existing EmuHub server found, trying WebVM...')
+      
       // Step 1: Initialize WebVM
       const webvmInitialized = await this.initWebVM()
       if (!webvmInitialized) {
-        console.error('Failed to initialize WebVM')
+        console.warn('⚠️ WebVM not available, EmuHub will not work')
         return false
       }
 
       // Step 2: Start Docker in WebVM (if not already running)
       const dockerReady = await this.startDockerInWebVM()
       if (!dockerReady) {
-        console.error('Failed to start Docker in WebVM')
+        console.warn('⚠️ Docker not available in WebVM')
         return false
       }
 
       // Step 3: Pull and start EmuHub container
       const containerStarted = await this.startEmuHubContainer()
       if (!containerStarted) {
-        console.error('Failed to start EmuHub container')
+        console.warn('⚠️ Failed to start EmuHub container')
         return false
       }
 
-      // Step 4: Wait for EmuHub to be ready
-      await this.waitForEmuHubReady()
+      // Step 4: Wait for EmuHub to be ready (longer wait for container startup)
+      await this.waitForEmuHubReady(30) // Wait up to 30 seconds
 
       // Step 5: Connect EmuHub integration
-      const emuhubConnected = await this.emuhub.connect()
+      const emuhubConnected = await this.emuhub.connect(10) // More retries for container startup
       if (!emuhubConnected) {
-        console.warn('EmuHub container started but not responding yet')
+        console.warn('⚠️ EmuHub container started but not responding yet')
         // Still mark as initialized, it might be starting up
       }
 
       this.isInitialized = true
-      console.log('WebVM + EmuHub integration initialized successfully')
+      console.log('✅ WebVM + EmuHub integration initialized successfully')
       return true
     } catch (error) {
-      console.error('Failed to initialize WebVM + EmuHub:', error)
+      console.error('❌ Failed to initialize WebVM + EmuHub:', error)
       return false
     }
   }
@@ -426,10 +464,12 @@ export class WebVMEmuHubIntegration {
       this.emuhubServerUrl = `http://localhost:${this.config.emuhubPort || 8000}`
       
       // Update EmuHub integration with the server URL
-      this.emuhub = new EmuHubIntegration({
+      this.emuhub = new EnhancedEmuHubIntegration({
         serverUrl: this.emuhubServerUrl,
         vncPassword: this.config.vncPassword,
         emuhubPassword: this.config.emuhubPassword,
+        listenPort: this.config.emuhubPort || 8000,
+        useWebVM: !!this.webvm,
       })
 
       return true
@@ -442,17 +482,13 @@ export class WebVMEmuHubIntegration {
   /**
    * Wait for EmuHub to be ready
    */
-  private async waitForEmuHubReady(maxAttempts: number = 5): Promise<void> {
-    // Only wait if WebVM is actually available (not simulated)
-    if (!this.webvm || !this.webvm.isReady || typeof this.webvm.isReady !== 'function' || !this.webvm.isReady()) {
-      // WebVM is not actually running, skip health check
-      return
-    }
+  private async waitForEmuHubReady(maxAttempts: number = 30): Promise<void> {
+    console.log(`⏳ Waiting for EmuHub to be ready (max ${maxAttempts} attempts)...`)
     
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 1000)
+        const timeoutId = setTimeout(() => controller.abort(), 2000)
         
         try {
           const response = await fetch(`${this.emuhubServerUrl}/health`, {
@@ -462,23 +498,26 @@ export class WebVMEmuHubIntegration {
 
           if (response.ok) {
             clearTimeout(timeoutId)
+            console.log(`✅ EmuHub is ready after ${i + 1} attempts`)
             return
           }
         } catch (fetchError) {
           clearTimeout(timeoutId)
-          // Connection refused is expected if EmuHub isn't running
-          if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
-            // Silently continue - EmuHub might not be available
-          }
+          // Connection refused is expected if EmuHub isn't running yet
         }
       } catch (error) {
-        // Silently continue
+        // Continue waiting
       }
 
       if (i < maxAttempts - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (i % 5 === 0) {
+          console.log(`⏳ Still waiting... (${i + 1}/${maxAttempts})`)
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
+    
+    console.warn('⚠️ EmuHub did not become ready in time, but continuing...')
   }
 
   /**
@@ -501,10 +540,19 @@ export class WebVMEmuHubIntegration {
     screenResolution?: string
   }): Promise<EmuHubEmulator | null> {
     if (!this.isInitialized) {
-      await this.init()
+      const initialized = await this.init()
+      if (!initialized) {
+        return null
+      }
     }
 
-    return await this.emuhub.createEmulator(config)
+    try {
+      const emulator = await this.emuhub.createEmulator(config)
+      return emulator
+    } catch (error) {
+      console.error('Failed to create emulator:', error)
+      return null
+    }
   }
 
   /**
@@ -522,7 +570,26 @@ export class WebVMEmuHubIntegration {
    * Get VNC URL for an emulator
    */
   getVNCUrl(emulatorId: string): string {
-    return this.emuhub.getVNCUrl(emulatorId)
+    try {
+      const url = this.emuhub.getVNCUrl(emulatorId)
+      if (url) return url
+    } catch (error) {
+      console.warn('Failed to get VNC URL from emuhub, using fallback:', error)
+    }
+    
+    // Return a fallback URL with common patterns
+    const serverUrl = this.emuhubServerUrl || 'http://localhost:8000'
+    const password = encodeURIComponent(this.config.vncPassword || 'admin')
+    
+    // Try common VNC URL patterns
+    return `${serverUrl}/vnc/${emulatorId}?password=${password}`
+  }
+  
+  /**
+   * Get current emulator from EmuHub
+   */
+  getCurrentEmulator(): EmuHubEmulator | null {
+    return this.emuhub.getCurrentEmulator()
   }
 
   /**

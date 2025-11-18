@@ -24,7 +24,7 @@ export default function Home() {
     emulationMode: hookEmulationMode,
     setEmulationMode: setHookEmulationMode
   } = useAndroidVM()
-  const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('browser')
+  const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('webvm-emuhub')
   
   // Sync emulation mode with hook
   useEffect(() => {

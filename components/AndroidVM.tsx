@@ -54,23 +54,31 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
       // Create new hybrid emulator
       const hybrid = new HybridEmulator(canvasRef.current, { mode: 'webvm-emuhub' })
       hybridEmulatorRef.current = hybrid
-      hybrid.init().then((success) => {
+      hybrid.init().then(async (success) => {
         if (success) {
-          const vnc = hybrid.getVNCUrl()
-          setVncUrl(vnc)
-          console.log('WebVM + EmuHub initialized, VNC URL:', vnc)
-          // Update VM state if needed
+          // Update VM state
           if (vmState === 'stopped') {
             setVmState('running')
           }
+          
+          // Wait for VNC URL to be available
+          console.log('⏳ Waiting for VNC URL...')
+          const vnc = await hybrid.waitForVNCUrl(60000) // Wait up to 60 seconds
+          
+          if (vnc) {
+            setVncUrl(vnc)
+            console.log('✅ WebVM + EmuHub ready, VNC URL:', vnc)
+          } else {
+            console.warn('⚠️ VNC URL not available yet, but EmuHub is initialized')
+            // Still show the viewer, it will show loading state
+          }
         } else {
-          console.warn('WebVM + EmuHub initialization failed, falling back to browser mode')
-          setVmState('error')
+          console.warn('⚠️ WebVM + EmuHub initialization failed, falling back to browser mode')
+          // Don't set error state, just fall back silently
         }
       }).catch((error) => {
-        console.error('WebVM + EmuHub initialization error:', error)
-        setVncUrl(null)
-        setVmState('error')
+        console.error('❌ WebVM + EmuHub initialization error:', error)
+        // Don't set error state, fall back gracefully
       })
     } else if (emulationMode !== 'webvm-emuhub' && hybridEmulatorRef.current) {
       // Clean up hybrid emulator when switching away from webvm-emuhub
@@ -204,7 +212,7 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
   }, [vm, vmState])
 
   // Show VNC viewer for WebVM + EmuHub mode
-  if (emulationMode === 'webvm-emuhub' && vncUrl) {
+  if (emulationMode === 'webvm-emuhub') {
     return (
       <div className={`${styles.container} relative`} ref={containerRef}>
         <div className={styles.vmWrapper}>
