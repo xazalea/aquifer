@@ -90,8 +90,9 @@ export class EnhancedAndroidEmulator extends AndroidEmulator {
     const dexFile = await this.functionalDexParser.parseDex(data);
 
     // Get APK info using existing parser for compatibility
-    const apkParser = new (await import('./apk-parser')).APKParser();
-    const apkInfo = await apkParser.parseAPK(apkFile);
+    const { APKParser } = await import('./apk-parser');
+    const apkParser = new APKParser(arrayBuffer);
+    const apkInfo = await apkParser.parse();
 
     // Create installed app
     const installedApp: InstalledApp = {
