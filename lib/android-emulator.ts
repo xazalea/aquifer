@@ -43,7 +43,7 @@ export class AndroidEmulator {
   private performanceMonitor: PerformanceMonitor
   private viewSystem: AndroidViewSystem
   private gameEngine: GameEngine
-  private armEmulator: ARMEmulator
+  protected armEmulator: ARMEmulator
   private openglES: OpenGLESWebGL
   private enhancedVM: EnhancedDalvikVM
   private isGame: boolean = false

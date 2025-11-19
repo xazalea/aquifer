@@ -14,18 +14,15 @@ import { AndroidEmulator, InstalledApp } from './android-emulator';
 import { getWASMEmulator } from './wasm-bridge';
 import { getGoWASMOrchestrator } from './go-wasm-bridge';
 import { EnhancedDexParser } from './enhanced-dex-parser';
-import { ARMEmulator } from './arm-emulator';
 
 export class EnhancedAndroidEmulator extends AndroidEmulator {
   private goOrchestrator: ReturnType<typeof getGoWASMOrchestrator> | null = null;
   private functionalDexParser: EnhancedDexParser;
   private wasmEmulator: ReturnType<typeof getWASMEmulator> | null = null;
-  private armEmulator: ARMEmulator;
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
     this.functionalDexParser = new EnhancedDexParser();
-    this.armEmulator = new ARMEmulator();
     this.wasmEmulator = getWASMEmulator();
   }
 
