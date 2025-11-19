@@ -260,6 +260,25 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
               <p className={styles.errorText}>
                 {error || 'Error starting VM. Please try again.'}
               </p>
+              {error && error.includes('Docker/WebVM') && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Docker/WebVM initialization failed. You can manually switch to browser mode to run apps.
+                  </p>
+                  <button
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    onClick={() => {
+                      // Switch to browser mode via custom event
+                      const event = new CustomEvent('switch-emulation-mode', { detail: 'browser' })
+                      window.dispatchEvent(event)
+                      setVmState('stopped')
+                      setError(null)
+                    }}
+                  >
+                    Switch to Browser Mode
+                  </button>
+                </div>
+              )}
               <button
                 className={styles.retryButton}
                 onClick={() => setVmState('stopped')}

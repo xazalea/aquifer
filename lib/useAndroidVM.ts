@@ -31,14 +31,39 @@ export function useAndroidVM() {
       }
       
       const emulator = new HybridEmulator(canvas, { mode }) // Use HybridEmulator with config
-      const initialized = await emulator.init() // Initialize the hybrid emulator
+      
+      // DOCKER FIRST - try Docker/WebVM first if mode is 'auto'
+      if (mode === 'auto') {
+        try {
+          // Try Docker/WebVM first
+          const dockerEmulator = new HybridEmulator(canvas, { mode: 'webvm-emuhub' })
+          const initialized = await dockerEmulator.init()
+          
+          if (initialized) {
+            console.log('✅ Docker/WebVM initialized successfully')
+            setVm({ canvas, emulator: dockerEmulator })
+            setEmulationMode('webvm-emuhub')
+            setTimeout(() => setIsReady(true), 500)
+            return
+          }
+        } catch (dockerError) {
+          // Docker failed - show error but allow manual fallback
+          const errorMsg = dockerError instanceof Error ? dockerError.message : String(dockerError)
+          console.warn('⚠️ Docker/WebVM initialization failed, you can manually switch to browser mode:', errorMsg)
+          setError(`Docker/WebVM failed: ${errorMsg}. You can manually switch to browser mode.`)
+          // Don't throw - let user manually choose browser mode
+        }
+      }
+      
+      // If Docker failed or mode is 'browser', use browser mode
+      const initialized = await emulator.init()
       
       if (!initialized) {
         throw new Error('Failed to initialize emulator')
       }
       
       setVm({ canvas, emulator })
-      setEmulationMode(mode)
+      setEmulationMode(mode === 'auto' ? 'browser' : mode)
       
       // Simulate initialization delay (reduced for faster startup)
       setTimeout(() => {
@@ -109,14 +134,21 @@ export function useAndroidVM() {
     }
   }, [vm, isInstalling])
 
-  const launchApp = useCallback((packageName: string) => {
+  const launchApp = useCallback(async (packageName: string) => {
     if (vm?.emulator) {
       const browserEmulator = (vm.emulator as any).getBrowserEmulator?.()
       if (browserEmulator) {
         browserEmulator.launchApp(packageName)
+        // Ensure app is actually running
+        if (!browserEmulator.isRunning) {
+          await browserEmulator.start()
+        }
       } else {
-        // Try to launch via hybrid emulator
-        ;(vm.emulator as any).launchApp?.(packageName)
+        // Try to launch via hybrid emulator (async)
+        const hybridEmulator = vm.emulator as any
+        if (hybridEmulator.launchApp) {
+          await hybridEmulator.launchApp(packageName)
+        }
       }
     }
   }, [vm])

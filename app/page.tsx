@@ -33,6 +33,20 @@ export default function Home() {
     }
   }, [emulationMode, hookEmulationMode, setHookEmulationMode])
 
+  // Listen for manual mode switch from error screen
+  useEffect(() => {
+    const handleModeSwitch = (event: CustomEvent) => {
+      const newMode = event.detail as 'browser' | 'webvm-emuhub' | 'auto'
+      setEmulationMode(newMode)
+      setError(null) // Clear error when switching modes
+    }
+    
+    window.addEventListener('switch-emulation-mode', handleModeSwitch as EventListener)
+    return () => {
+      window.removeEventListener('switch-emulation-mode', handleModeSwitch as EventListener)
+    }
+  }, [])
+
   // Initialize app storage
   useEffect(() => {
     appStorage.init().catch(console.error)

@@ -64,6 +64,27 @@ export class WASMEmulatorBridge {
         throw new Error('WASM module can only be loaded in browser');
       }
 
+      // Check if WASM files exist and are valid JavaScript before trying to load
+      try {
+        const response = await fetch('/wasm/emulator.js');
+        if (!response.ok) {
+          throw new Error('WASM module files not found');
+        }
+        const contentType = response.headers.get('content-type') || '';
+        // Check if we got HTML (404 page) instead of JavaScript
+        if (contentType.includes('text/html')) {
+          throw new Error('WASM module files not found (404)');
+        }
+        // Check first few bytes to ensure it's not HTML
+        const text = await response.text();
+        if (text.trim().startsWith('<!')) {
+          throw new Error('WASM module files not found (404 HTML page)');
+        }
+      } catch (error) {
+        // File doesn't exist or is invalid, skip WASM loading
+        throw error instanceof Error ? error : new Error('WASM module files not found');
+      }
+
       // Load JavaScript loader dynamically at runtime
       // Use a script tag approach for Emscripten-generated modules
       const script = document.createElement('script');
@@ -71,28 +92,57 @@ export class WASMEmulatorBridge {
       script.async = true;
       
       await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('WASM module load timeout'));
+        }, 10000); // 10 second timeout
+
         script.onload = () => {
-          // Emscripten modules expose themselves globally
-          const moduleFactory = (window as any).createWASMEmulator;
-          if (!moduleFactory) {
-            reject(new Error('WASM module factory not found'));
-            return;
-          }
-          
-          // Initialize module with WASM file path
-          moduleFactory({
-            locateFile: (path: string) => {
-              if (path.endsWith('.wasm')) {
-                return '/wasm/emulator.wasm';
-              }
-              return path;
+          clearTimeout(timeout);
+          try {
+            // Emscripten modules expose themselves globally
+            const moduleFactory = (window as any).createWASMEmulator;
+            if (!moduleFactory) {
+              reject(new Error('WASM module factory not found'));
+              return;
             }
-          }).then((module: WASMEmulatorModule) => {
-            this.module = module;
-            resolve();
-          }).catch(reject);
+            
+            // Initialize module with WASM file path
+            moduleFactory({
+              locateFile: (path: string) => {
+                if (path.endsWith('.wasm')) {
+                  return '/wasm/emulator.wasm';
+                }
+                return path;
+              }
+            }).then((module: WASMEmulatorModule) => {
+              this.module = module;
+              resolve();
+            }).catch((err: Error) => {
+              reject(new Error(`Failed to initialize WASM module: ${err.message}`));
+            });
+          } catch (err) {
+            clearTimeout(timeout);
+            reject(new Error(`Error loading WASM module: ${err instanceof Error ? err.message : 'Unknown error'}`));
+          }
         };
-        script.onerror = () => reject(new Error('Failed to load WASM module script'));
+        
+        script.onerror = (event) => {
+          clearTimeout(timeout);
+          // Check if we got an HTML page (404) instead of JS
+          fetch('/wasm/emulator.js')
+            .then(res => res.text())
+            .then(text => {
+              if (text.trim().startsWith('<!')) {
+                reject(new Error('WASM module file not found (404)'));
+              } else {
+                reject(new Error('Failed to load WASM module script'));
+              }
+            })
+            .catch(() => {
+              reject(new Error('Failed to load WASM module script'));
+            });
+        };
+        
         document.head.appendChild(script);
       });
       

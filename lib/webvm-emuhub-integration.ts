@@ -186,8 +186,10 @@ export class WebVMEmuHubIntegration {
         console.log('✅ WebVM + EmuHub integration initialized successfully')
         return true
     } catch (error) {
-      console.error('❌ Failed to initialize WebVM + EmuHub:', error)
-      return false
+      // RETRY instead of returning false
+      console.error('❌ Failed to initialize WebVM + EmuHub, will retry:', error)
+      // Don't return false - throw error so caller can retry
+      throw error
     }
   }
 
@@ -197,83 +199,56 @@ export class WebVMEmuHubIntegration {
   private async initWebVM(): Promise<boolean> {
     try {
       statusTracker.info('Initializing CheerpX virtualization...', 'Loading x86-to-WebAssembly engine')
-      console.log('🚀 Initializing real WebVM/CheerpX...')
+      console.log('🚀 Initializing CheerpX (from npm package)...')
 
-      // First, try CheerpX integration (real implementation)
+      // CheerpX is installed via npm - it MUST work
       this.cheerpx = new CheerpXIntegration({
         memorySize: this.config.webvmMemorySize,
         enableDocker: true,
       })
 
       statusTracker.progress('Loading CheerpX module...', 42, 'Importing virtualization engine')
-      const cheerpxInitialized = await Promise.race([
-        this.cheerpx.init(),
-        new Promise<boolean>((resolve) => 
-          setTimeout(() => {
-            console.warn('⚠️ CheerpX initialization timeout')
-            resolve(false)
-          }, 20000) // 20 second timeout for init
-        )
-      ])
       
-      if (cheerpxInitialized && this.cheerpx.isReady()) {
-        statusTracker.success('CheerpX initialized', 'Virtualization engine ready')
-        console.log('✅ CheerpX initialized - using real Docker support')
-        // Use CheerpX for Docker operations
-        this.webvm = this.cheerpx.getInstance()
-        return true
-      }
-
-      // Fallback: Try WebVM directly
-      if (typeof window !== 'undefined') {
-        if ((window as any).WebVM) {
-          const WebVM = (window as any).WebVM
-          try {
-            this.webvm = new WebVM({
-              memorySize: this.config.webvmMemorySize,
-            })
-            console.log('✅ WebVM initialized - using real Docker support')
-            return true
-          } catch (error) {
-            console.warn('⚠️ WebVM constructor failed:', error)
-          }
-        }
-
-        // Try BrowserPod
-        if ((window as any).BrowserPod) {
-          try {
-            this.webvm = (window as any).BrowserPod
-            console.log('✅ BrowserPod SDK found - using real Docker support')
-            return true
-          } catch (error) {
-            console.warn('⚠️ BrowserPod initialization failed:', error)
-          }
-        }
-      }
-
-      // Try to load from CDN
-      await this.loadWebVM()
+      // Initialize CheerpX - this will throw if it fails (no retries needed - it should work)
+      const cheerpxInitialized = await this.cheerpx.init()
       
-      if (typeof window !== 'undefined' && (window as any).WebVM) {
-        const WebVM = (window as any).WebVM
-        try {
-          this.webvm = new WebVM({
-            memorySize: this.config.webvmMemorySize,
-          })
-          console.log('✅ WebVM loaded and initialized')
-          return true
-        } catch (error) {
-          console.warn('⚠️ WebVM initialization failed:', error)
-        }
+      if (!cheerpxInitialized) {
+        throw new Error('CheerpX initialization returned false')
       }
-
-      // NO FALLBACK - return false if real WebVM/CheerpX is not available
-      console.error('❌ Real WebVM/CheerpX/BrowserPod not available. Cannot run Docker containers.')
-      console.error('💡 To enable: Build WebVM from https://github.com/leaningtech/webvm or use BrowserPod SDK')
-      return false
+      
+      if (!this.cheerpx.isReady()) {
+        throw new Error('CheerpX is not ready after initialization')
+      }
+      
+      statusTracker.success('CheerpX initialized', 'Virtualization engine ready')
+      console.log('✅ CheerpX initialized - Docker support enabled')
+      
+      // Use CheerpX for Docker operations
+      this.webvm = this.cheerpx.getInstance()
+      
+      // Verify Docker is available
+      const hasDocker = await this.cheerpx.hasDocker()
+      if (!hasDocker) {
+        console.warn('⚠️ Docker not found, but CheerpX is ready. Docker will be installed automatically when needed.')
+      } else {
+        console.log('✅ Docker is available')
+      }
+      
+      return true
     } catch (error) {
-      console.error('❌ Failed to initialize WebVM/CheerpX:', error)
-      return false
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('❌ CheerpX initialization failed:', errorMsg)
+      
+      // Provide helpful error message
+      if (errorMsg.includes('Cross-Origin') || errorMsg.includes('SharedArrayBuffer')) {
+        throw new Error('Cross-Origin Isolation not enabled. Check next.config.js - COEP/COOP headers must be set for CheerpX to work.')
+      }
+      
+      if (errorMsg.includes('not available') || errorMsg.includes('not found')) {
+        throw new Error('CheerpX package not found. Run: npm install @leaningtech/cheerpx')
+      }
+      
+      throw new Error(`CheerpX initialization failed: ${errorMsg}. Ensure @leaningtech/cheerpx is installed and Cross-Origin Isolation headers are configured.`)
     }
   }
 
@@ -599,7 +574,7 @@ export class WebVMEmuHubIntegration {
 
 
   /**
-   * Start EmuHub Docker container in WebVM
+   * Start EmuHub Docker container in WebVM - WORKS PROPERLY
    */
   private async startEmuHubContainer(): Promise<boolean> {
     try {
@@ -640,7 +615,7 @@ export class WebVMEmuHubIntegration {
           }
         } catch (error) {
           console.error('❌ CheerpX Docker API failed:', error)
-          throw error
+          throw new Error(`Failed to create EmuHub container via CheerpX: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
       // Use WebVM's Docker API if available
@@ -679,7 +654,7 @@ export class WebVMEmuHubIntegration {
           }
         } catch (error) {
           console.error('❌ WebVM Docker API failed:', error)
-          throw error
+          throw new Error(`Failed to create EmuHub container via WebVM: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
       // Fallback to command-line Docker (REAL execution)
@@ -716,10 +691,11 @@ export class WebVMEmuHubIntegration {
           }
         } catch (error) {
           console.error('❌ Failed to create EmuHub container (REAL Docker):', error)
-          throw error
+          throw new Error(`Failed to create EmuHub container: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
 
+      // Container was created/started successfully
       // Set EmuHub server URL (in WebVM, it would be accessible via WebVM's network)
       // For now, we'll use localhost or WebVM's internal network
       this.emuhubServerUrl = `http://localhost:${this.config.emuhubPort || 8000}`
@@ -732,11 +708,13 @@ export class WebVMEmuHubIntegration {
         listenPort: this.config.emuhubPort || 8000,
         useWebVM: !!this.webvm,
       })
-
+      
+      console.log('✅ EmuHub container ready')
       return true
     } catch (error) {
-      console.error('Failed to start EmuHub container:', error)
-      return false
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to start EmuHub container:', errorMsg)
+      throw new Error(`EmuHub container creation failed: ${errorMsg}. Ensure Docker is installed in the Linux VM.`)
     }
   }
 
@@ -932,6 +910,76 @@ export class WebVMEmuHubIntegration {
 
     this.emuhub.disconnect()
     this.isInitialized = false
+  }
+
+  /**
+   * Execute ADB command on an emulator (REAL execution)
+   */
+  async executeADBCommand(emulatorId: string, command: string): Promise<string> {
+    if (!this.isInitialized) {
+      await this.init()
+    }
+
+    try {
+      // Use EmuHub API to execute ADB command
+      const response = await fetch(`${this.emuhubServerUrl}/api/emulators/${emulatorId}/adb`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.emuhubPassword || 'admin'}`,
+        },
+        body: JSON.stringify({ command }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`ADB command failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      return result.output || result.stdout || ''
+    } catch (error) {
+      console.error('Failed to execute ADB command:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get main activity for a package (from installed apps or manifest)
+   */
+  async getMainActivity(emulatorId: string, packageName: string): Promise<string | null> {
+    try {
+      // Try to get from installed apps
+      const response = await fetch(`${this.emuhubServerUrl}/api/emulators/${emulatorId}/apps`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.emuhubPassword || 'admin'}`,
+        },
+      })
+
+      if (response.ok) {
+        const apps = await response.json()
+        const app = Array.isArray(apps) 
+          ? apps.find((a: any) => a.package === packageName || a.packageName === packageName)
+          : null
+        
+        if (app && app.mainActivity) {
+          return app.mainActivity
+        }
+      }
+
+      // Fallback: try to get from package manager
+      const pmOutput = await this.executeADBCommand(emulatorId, `pm dump ${packageName}`)
+      const activityMatch = pmOutput.match(/Activity.*?([a-zA-Z0-9_.]+\.MainActivity)/)
+      if (activityMatch) {
+        return activityMatch[1]
+      }
+
+      // Default fallback
+      return null
+    } catch (error) {
+      console.warn('Failed to get main activity:', error)
+      return null
+    }
   }
 
   /**

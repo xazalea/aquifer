@@ -55,14 +55,15 @@ export class HybridEmulator {
 
       /**
        * Initialize the hybrid emulator
+       * DOCKER IS FIRST - tries WebVM/Docker first, then allows manual fallback to browser
        */
       async init(): Promise<boolean> {
         const stopTiming = performanceOptimizer.startTiming('hybrid-emulator-init')
         
         try {
-          console.log('Initializing Hybrid Emulator, mode:', this.mode)
+          console.log('🚀 Initializing Hybrid Emulator, mode:', this.mode)
 
-          // Auto-detect best mode
+          // Auto-detect best mode - ALWAYS try Docker first
           if (this.mode === 'auto') {
             this.mode = await this.detectBestMode()
             console.log('Auto-selected mode:', this.mode)
@@ -70,49 +71,37 @@ export class HybridEmulator {
 
       switch (this.mode) {
         case 'webvm-emuhub': {
-          // Try WebVM/EmuHub, but fallback to browser if it fails quickly
-          console.log('⚡ Trying WebVM + EmuHub...')
+          // DOCKER FIRST - Initialize WebVM/EmuHub (Docker)
+          console.log('🐳 Initializing Docker/WebVM + EmuHub (FIRST PRIORITY)...')
+          
           try {
-            const result = await Promise.race([
-              this.initWebVMEmuHub(),
-              new Promise<boolean>((resolve) => 
-                setTimeout(() => {
-                  console.warn('⚠️ WebVM/EmuHub initialization timeout, falling back to browser mode')
-                  resolve(false)
-                }, 10000) // 10 second timeout
-              )
-            ])
+            // Initialize - will throw if it fails
+            const result = await this.initWebVMEmuHub()
             
-            if (result) {
-              return true
+            if (!result) {
+              throw new Error('WebVM/EmuHub initialization returned false')
             }
             
-            // Fallback to browser mode
-            console.log('📱 Falling back to browser-based emulation (always works)')
-            this.mode = 'browser'
-            return await this.initBrowser()
+            console.log('✅ Docker/WebVM + EmuHub initialized successfully')
+            return true
           } catch (error) {
-            console.warn('⚠️ WebVM/EmuHub failed, falling back to browser mode:', error)
-            this.mode = 'browser'
-            return await this.initBrowser()
+            // Docker failed - throw error so user can manually fallback
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            console.error('❌ Docker/WebVM initialization failed:', errorMsg)
+            console.log('💡 You can manually switch to browser mode if Docker is not available')
+            throw new Error(`Docker/WebVM initialization failed: ${errorMsg}. You can manually switch to browser mode.`)
           }
         }
             case 'browser':
             default:
+              // Browser mode - ensure games actually run and play
+              console.log('🌐 Initializing browser mode (games will run and play)...')
               return await this.initBrowser()
           }
         } catch (error) {
-          // Attempt error recovery
-          const recovered = await ErrorRecovery.recover(
-            error instanceof Error ? error : new Error(String(error)),
-            'hybrid-emulator'
-          )
-          
-          if (!recovered) {
-            throw error
-          }
-          
-          return false
+          // Don't auto-recover - let user manually choose fallback
+          // Just re-throw the error
+          throw error
         } finally {
           stopTiming()
         }
@@ -120,15 +109,15 @@ export class HybridEmulator {
 
   /**
    * Detect the best available emulation mode
+   * DOCKER FIRST - always try Docker/WebVM first
    */
   private async detectBestMode(): Promise<EmulationMode> {
     console.log('🔍 Detecting best emulation mode...')
     
-    // Browser mode is always available and works reliably
-    // WebVM/EmuHub is experimental and often fails
-    // Default to browser for reliability
-    console.log('📱 Using browser-based emulation (reliable and always works)')
-    return 'browser'
+    // DOCKER FIRST - always try WebVM/EmuHub (Docker) first
+    // CheerpX is installed via npm, so it should be available
+    console.log('🐳 Trying Docker/WebVM mode first (CheerpX from npm package)...')
+    return 'webvm-emuhub'
   }
 
   /**
@@ -297,20 +286,52 @@ export class HybridEmulator {
   }
 
   /**
-   * Launch app by package name
+   * Launch app by package name - ACTUALLY RUNS THE APP
    */
-  launchApp(packageName: string): void {
+  async launchApp(packageName: string): Promise<void> {
     switch (this.mode) {
       case 'browser':
         if (this.browserEmulator) {
+          // Browser mode - actually execute the app code
           this.browserEmulator.launchApp(packageName)
+          // Ensure app is running and rendering
+          if (!this.browserEmulator.isRunning) {
+            await this.browserEmulator.start()
+          }
         }
         break
       case 'webvm-emuhub':
-        // For EmuHub, apps are launched via ADB commands
-        // Note: launchApp method may not be implemented in webvmEmuhub
-        console.log('Launching app in EmuHub mode:', packageName)
-        // Apps are launched automatically after installation in EmuHub
+        // For EmuHub, launch app via ADB command (REAL execution)
+        if (this.currentEmulator) {
+          try {
+            console.log('🚀 Launching app in EmuHub via ADB:', packageName)
+            // Get main activity from installed apps or use default
+            const mainActivity = await this.webvmEmuhub.getMainActivity(this.currentEmulator.id, packageName)
+            const activity = mainActivity || `${packageName}/.MainActivity`
+            
+            // Execute ADB command to launch app (REAL execution)
+            await this.webvmEmuhub.executeADBCommand(
+              this.currentEmulator.id,
+              `am start -n ${activity}`
+            )
+            console.log('✅ App launched and running:', packageName)
+          } catch (error) {
+            console.error('❌ Failed to launch app via ADB:', error)
+            // Try alternative method
+            try {
+              await this.webvmEmuhub.executeADBCommand(
+                this.currentEmulator.id,
+                `monkey -p ${packageName} -c android.intent.category.LAUNCHER 1`
+              )
+              console.log('✅ App launched via monkey:', packageName)
+            } catch (fallbackError) {
+              console.error('❌ All launch methods failed:', fallbackError)
+              throw new Error(`Failed to launch app ${packageName}: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`)
+            }
+          }
+        } else {
+          throw new Error('EmuHub emulator not initialized')
+        }
         break
     }
   }

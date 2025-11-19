@@ -53,14 +53,42 @@ export class GoWASMBridge {
         throw new Error('Go WASM module can only be loaded in browser');
       }
 
+      // Check if wasm_exec.js exists and is valid before loading
+      try {
+        const response = await fetch('/wasm/wasm_exec.js');
+        if (!response.ok) {
+          throw new Error('wasm_exec.js not found');
+        }
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) {
+          throw new Error('wasm_exec.js not found (404)');
+        }
+        const text = await response.text();
+        if (text.trim().startsWith('<!')) {
+          throw new Error('wasm_exec.js not found (404 HTML page)');
+        }
+      } catch (error) {
+        throw error instanceof Error ? error : new Error('wasm_exec.js not found');
+      }
+
       // Load Go WASM support via script tag (can't use import for public files)
       const wasmExecScript = document.createElement('script');
       wasmExecScript.src = '/wasm/wasm_exec.js';
       wasmExecScript.async = true;
       
       await new Promise<void>((resolve, reject) => {
-        wasmExecScript.onload = () => resolve();
-        wasmExecScript.onerror = () => reject(new Error('Failed to load wasm_exec.js'));
+        const timeout = setTimeout(() => {
+          reject(new Error('wasm_exec.js load timeout'));
+        }, 10000);
+        
+        wasmExecScript.onload = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        wasmExecScript.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Failed to load wasm_exec.js'));
+        };
         document.head.appendChild(wasmExecScript);
       });
 
