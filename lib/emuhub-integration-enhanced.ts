@@ -49,10 +49,13 @@ export class EnhancedEmuHubIntegration {
   async connect(maxRetries: number = 10): Promise<boolean> {
     console.log('Connecting to EmuHub server:', this.config.serverUrl)
     
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Use shorter timeout for initial connection attempts
+    const connectionTimeout = maxRetries === 0 ? 1000 : 2000 // 1s for quick check, 2s for retries
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000)
+        const timeoutId = setTimeout(() => controller.abort(), connectionTimeout)
         
         try {
           // Try health endpoint first
@@ -78,23 +81,33 @@ export class EnhancedEmuHubIntegration {
         } catch (fetchError) {
           clearTimeout(timeoutId)
           
+          // If maxRetries is 0, don't retry - just fail fast
+          if (maxRetries === 0) {
+            return false
+          }
+          
           // Try alternative endpoints
-          if (attempt < maxRetries - 1) {
-            console.log(`Connection attempt ${attempt + 1}/${maxRetries} failed, retrying...`)
-            await new Promise(resolve => setTimeout(resolve, 2000))
+          if (attempt < maxRetries) {
+            console.log(`Connection attempt ${attempt + 1}/${maxRetries + 1} failed, retrying...`)
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Reduced wait time
             continue
           }
         }
       } catch (error) {
-        if (attempt < maxRetries - 1) {
-          console.log(`Connection attempt ${attempt + 1}/${maxRetries} failed, retrying...`)
-          await new Promise(resolve => setTimeout(resolve, 2000))
+        // If maxRetries is 0, don't retry - just fail fast
+        if (maxRetries === 0) {
+          return false
+        }
+        
+        if (attempt < maxRetries) {
+          console.log(`Connection attempt ${attempt + 1}/${maxRetries + 1} failed, retrying...`)
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Reduced wait time
           continue
         }
       }
     }
 
-    console.warn('❌ Failed to connect to EmuHub server after', maxRetries, 'attempts')
+    console.warn('❌ Failed to connect to EmuHub server after', maxRetries + 1, 'attempts')
     return false
   }
 

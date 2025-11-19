@@ -68,8 +68,8 @@ export class WebVMEmuHubIntegration {
       statusTracker.info('Initializing WebVM + EmuHub integration...')
       console.log('🚀 Initializing WebVM + EmuHub integration...')
 
-      // Strategy 1: Try to connect to existing EmuHub server first
-      // This allows using a real EmuHub server if available
+      // Strategy 1: Quick parallel check for existing EmuHub server (very fast - don't block)
+      // This allows using a real EmuHub server if available, but won't block if none exists
       const existingServerUrls = [
         `http://localhost:${this.config.emuhubPort || 8000}`,
         'http://localhost:8000',
@@ -77,47 +77,71 @@ export class WebVMEmuHubIntegration {
       ]
 
       statusTracker.progress('Checking for existing EmuHub server...', 10)
+      console.log('🔍 Quick check for existing EmuHub server...')
       
-      for (const serverUrl of existingServerUrls) {
-        this.emuhubServerUrl = serverUrl
-        this.emuhub = new EnhancedEmuHubIntegration({
-          serverUrl: this.emuhubServerUrl,
+      // Check all URLs in parallel with very short timeout (1 second total)
+      const connectionPromises = existingServerUrls.map(async (serverUrl) => {
+        const emuhub = new EnhancedEmuHubIntegration({
+          serverUrl: serverUrl,
           vncPassword: this.config.vncPassword,
           emuhubPassword: this.config.emuhubPassword,
           listenPort: this.config.emuhubPort || 8000,
           useWebVM: false,
         })
-
-        statusTracker.info(`Trying to connect to EmuHub at ${serverUrl}...`, 'Checking connection...')
-        console.log(`🔍 Trying to connect to EmuHub at ${serverUrl}...`)
         
         try {
-          const connected = await this.emuhub.connect(1) // Quick check, 1 retry
+          // Very quick check - 0 retries, 1 second timeout
+          const connected = await Promise.race([
+            emuhub.connect(0), // No retries - just quick check
+            new Promise<boolean>((resolve) => 
+              setTimeout(() => resolve(false), 1000) // 1 second timeout per URL
+            )
+          ])
           
           if (connected) {
-            // Verify it's actually working by checking health
-            statusTracker.progress('Verifying EmuHub health...', 30)
-            const healthOk = await this.verifyEmuHubHealth(2)
-            if (healthOk) {
-              statusTracker.success(`Connected to existing EmuHub server at ${serverUrl}`)
-              console.log(`✅ Connected to existing EmuHub server at ${serverUrl}`)
-              this.isInitialized = true
-              return true
-            } else {
-              statusTracker.warning(`EmuHub at ${serverUrl} not responding to health checks`)
-              console.warn(`⚠️ EmuHub at ${serverUrl} not responding to health checks`)
-            }
+            return { serverUrl, emuhub, connected: true }
           }
         } catch (error) {
-          // Silently continue to next URL - this is expected if server doesn't exist
-          continue
+          // Ignore errors - server doesn't exist
+        }
+        return { serverUrl, emuhub, connected: false }
+      })
+      
+      // Wait for all checks to complete (max 1 second)
+      const results = await Promise.all(connectionPromises)
+      const foundServer = results.find(r => r.connected)
+      
+      if (foundServer) {
+        // Found an existing server - verify it's healthy
+        this.emuhubServerUrl = foundServer.serverUrl
+        this.emuhub = foundServer.emuhub
+        
+        statusTracker.progress('Verifying EmuHub health...', 30)
+        const healthOk = await Promise.race([
+          this.verifyEmuHubHealth(2),
+          new Promise<boolean>((resolve) => 
+            setTimeout(() => resolve(false), 2000) // 2 second timeout
+          )
+        ])
+        
+        if (healthOk) {
+          statusTracker.success(`Connected to existing EmuHub server at ${foundServer.serverUrl}`)
+          console.log(`✅ Connected to existing EmuHub server at ${foundServer.serverUrl}`)
+          this.isInitialized = true
+          return true
+        } else {
+          console.warn(`⚠️ EmuHub at ${foundServer.serverUrl} not responding to health checks`)
         }
       }
       
-      statusTracker.info('No existing EmuHub server found, initializing WebVM...', 'Setting up browser-based emulation')
-
+      // No existing server found - proceed to start container
+      console.log('📦 No existing EmuHub server found, proceeding to start container...')
+      
       // Strategy 2: Try to use WebVM to run EmuHub
-      console.log('📦 No existing EmuHub server found, trying WebVM...')
+      if (!foundExistingServer) {
+        statusTracker.info('No existing EmuHub server found, initializing WebVM...', 'Setting up browser-based emulation')
+        console.log('📦 No existing EmuHub server found, trying WebVM...')
+      }
       
       // Step 1: Initialize WebVM/CheerpX
       statusTracker.progress('Initializing WebVM/CheerpX...', 40, 'Setting up browser virtualization')
