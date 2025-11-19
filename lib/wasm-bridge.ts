@@ -1,0 +1,282 @@
+/**
+ * Professional WebAssembly Bridge for ARM Emulator
+ * 
+ * Provides a clean TypeScript interface to the C++ WebAssembly emulator module.
+ * Handles memory management, type safety, and error handling.
+ */
+
+export interface WASMEmulatorModule {
+  createEmulator(): number;
+  initEmulator(ptr: number, size: number): number;
+  writeMemory(ptr: number, address: number, dataPtr: number, length: number): number;
+  readMemory(ptr: number, address: number, outputPtr: number, length: number): number;
+  setRegister(ptr: number, reg: number, value: number): void;
+  getRegister(ptr: number, reg: number): number;
+  executeInstruction(ptr: number, instruction: number): number;
+  executeInstructions(ptr: number, instructionsPtr: number, count: number): number;
+  getInstructionCount(ptr: number): bigint;
+  getMemorySize(ptr: number): number;
+  getPC(ptr: number): number;
+  setPC(ptr: number, value: number): void;
+  destroyEmulator(ptr: number): void;
+  _malloc(size: number): number;
+  _free(ptr: number): void;
+  HEAPU8: Uint8Array;
+  HEAPU32: Uint32Array;
+}
+
+export interface WASMEmulatorStats {
+  instructionCount: number;
+  memorySize: number;
+  pc: number;
+}
+
+/**
+ * High-level TypeScript interface for the WASM ARM emulator
+ */
+export class WASMEmulatorBridge {
+  private module: WASMEmulatorModule | null = null;
+  private emulatorPtr: number | null = null;
+  private initialized: boolean = false;
+  private loadPromise: Promise<void> | null = null;
+
+  /**
+   * Initialize the WebAssembly module
+   * Can be called multiple times safely (returns cached promise if already loading)
+   */
+  async init(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.loadPromise) {
+      return this.loadPromise;
+    }
+
+    this.loadPromise = this._doInit();
+    return this.loadPromise;
+  }
+
+  private async _doInit(): Promise<void> {
+    try {
+      // Dynamic import of WASM module
+      const createModule = await import('/wasm/emulator.js');
+      const moduleFactory = createModule.default || createModule.createWASMEmulator;
+      
+      if (!moduleFactory) {
+        throw new Error('WASM module factory not found');
+      }
+
+      // Initialize module
+      this.module = await moduleFactory() as WASMEmulatorModule;
+      
+      if (!this.module) {
+        throw new Error('Failed to create WASM module');
+      }
+
+      // Create emulator instance
+      this.emulatorPtr = this.module.createEmulator();
+      
+      if (!this.emulatorPtr) {
+        throw new Error('Failed to create emulator instance');
+      }
+
+      // Initialize with 64MB memory
+      const initResult = this.module.initEmulator(this.emulatorPtr, 64 * 1024 * 1024);
+      if (!initResult) {
+        throw new Error('Failed to initialize emulator memory');
+      }
+
+      this.initialized = true;
+      console.log('[WASM] ARM Emulator initialized successfully');
+    } catch (error) {
+      console.error('[WASM] Failed to initialize ARM emulator:', error);
+      this.initialized = false;
+      this.emulatorPtr = null;
+      this.module = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Check if the emulator is initialized
+   */
+  isReady(): boolean {
+    return this.initialized && this.module !== null && this.emulatorPtr !== null;
+  }
+
+  /**
+   * Write data to emulator memory
+   */
+  writeMemory(address: number, data: Uint8Array): void {
+    this._ensureReady();
+
+    const dataPtr = this.module!._malloc(data.length);
+    if (!dataPtr) {
+      throw new Error('Failed to allocate memory for write operation');
+    }
+
+    try {
+      this.module!.HEAPU8.set(data, dataPtr);
+      const result = this.module!.writeMemory(this.emulatorPtr!, address, dataPtr, data.length);
+      if (!result) {
+        throw new Error(`Failed to write memory at address 0x${address.toString(16)}`);
+      }
+    } finally {
+      this.module!._free(dataPtr);
+    }
+  }
+
+  /**
+   * Read data from emulator memory
+   */
+  readMemory(address: number, length: number): Uint8Array {
+    this._ensureReady();
+
+    const outputPtr = this.module!._malloc(length);
+    if (!outputPtr) {
+      throw new Error('Failed to allocate memory for read operation');
+    }
+
+    try {
+      const result = this.module!.readMemory(this.emulatorPtr!, address, outputPtr, length);
+      if (!result) {
+        throw new Error(`Failed to read memory at address 0x${address.toString(16)}`);
+      }
+
+      // Copy data to avoid issues with WASM memory
+      const resultData = this.module!.HEAPU8.subarray(outputPtr, outputPtr + length);
+      return new Uint8Array(resultData);
+    } finally {
+      this.module!._free(outputPtr);
+    }
+  }
+
+  /**
+   * Set a register value
+   */
+  setRegister(reg: number, value: number): void {
+    this._ensureReady();
+    
+    if (reg > 16) {
+      throw new Error(`Invalid register number: ${reg} (must be 0-16)`);
+    }
+    
+    this.module!.setRegister(this.emulatorPtr!, reg, value);
+  }
+
+  /**
+   * Get a register value
+   */
+  getRegister(reg: number): number {
+    this._ensureReady();
+    
+    if (reg > 16) {
+      throw new Error(`Invalid register number: ${reg} (must be 0-16)`);
+    }
+    
+    return this.module!.getRegister(this.emulatorPtr!, reg);
+  }
+
+  /**
+   * Execute a single ARM instruction
+   */
+  executeInstruction(instruction: number): boolean {
+    this._ensureReady();
+    return this.module!.executeInstruction(this.emulatorPtr!, instruction) !== 0;
+  }
+
+  /**
+   * Execute multiple ARM instructions
+   * Returns the number of instructions successfully executed
+   */
+  executeInstructions(instructions: Uint32Array): number {
+    this._ensureReady();
+
+    const instructionsPtr = this.module!._malloc(instructions.length * 4);
+    if (!instructionsPtr) {
+      throw new Error('Failed to allocate memory for instructions');
+    }
+
+    try {
+      // Write instructions to WASM memory
+      this.module!.HEAPU32.set(instructions, instructionsPtr / 4);
+      
+      // Execute instructions
+      const executed = this.module!.executeInstructions(
+        this.emulatorPtr!,
+        instructionsPtr,
+        instructions.length
+      );
+      
+      return executed;
+    } finally {
+      this.module!._free(instructionsPtr);
+    }
+  }
+
+  /**
+   * Get execution statistics
+   */
+  getStats(): WASMEmulatorStats {
+    this._ensureReady();
+    
+    return {
+      instructionCount: Number(this.module!.getInstructionCount(this.emulatorPtr!)),
+      memorySize: this.module!.getMemorySize(this.emulatorPtr!),
+      pc: this.module!.getPC(this.emulatorPtr!),
+    };
+  }
+
+  /**
+   * Get program counter
+   */
+  getPC(): number {
+    this._ensureReady();
+    return this.module!.getPC(this.emulatorPtr!);
+  }
+
+  /**
+   * Set program counter
+   */
+  setPC(value: number): void {
+    this._ensureReady();
+    this.module!.setPC(this.emulatorPtr!, value);
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    if (this.module && this.emulatorPtr) {
+      this.module.destroyEmulator(this.emulatorPtr);
+      this.emulatorPtr = null;
+    }
+    this.initialized = false;
+    this.module = null;
+    this.loadPromise = null;
+  }
+
+  /**
+   * Ensure emulator is ready, throw error if not
+   */
+  private _ensureReady(): void {
+    if (!this.initialized || !this.module || !this.emulatorPtr) {
+      throw new Error('WASM emulator not initialized. Call init() first.');
+    }
+  }
+}
+
+// Singleton instance for easy access
+let wasmEmulatorInstance: WASMEmulatorBridge | null = null;
+
+/**
+ * Get or create the singleton WASM emulator instance
+ */
+export function getWASMEmulator(): WASMEmulatorBridge {
+  if (!wasmEmulatorInstance) {
+    wasmEmulatorInstance = new WASMEmulatorBridge();
+  }
+  return wasmEmulatorInstance;
+}
+

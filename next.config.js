@@ -11,6 +11,20 @@ const nextConfig = {
         crypto: false,
       };
     }
+    
+    // Enable WebAssembly support
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+    
+    // Handle WASM files
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    });
+    
     return config;
   },
   // Enable WebAssembly support
