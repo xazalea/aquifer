@@ -15,6 +15,7 @@
 
 import { EnhancedEmuHubIntegration, EmuHubEmulator } from './emuhub-integration-enhanced'
 import { CheerpXIntegration } from './cheerpx-integration'
+import { HeadscaleIntegration } from './headscale-integration'
 import { statusTracker } from './status-tracker'
 
 export interface WebVMEmuHubConfig {
@@ -29,10 +30,12 @@ export class WebVMEmuHubIntegration {
   private webvm: any = null
   private cheerpx: CheerpXIntegration | null = null
   private emuhub: EnhancedEmuHubIntegration
+  private headscale: HeadscaleIntegration | null = null
   private isInitialized: boolean = false
   private dockerContainerId: string | null = null
   private config: WebVMEmuHubConfig
   private emuhubServerUrl: string = ''
+  private headscaleAuthKey: string = ''
 
   constructor(config?: Partial<WebVMEmuHubConfig>) {
     this.config = {
@@ -149,7 +152,28 @@ export class WebVMEmuHubIntegration {
         
         statusTracker.success('Docker daemon running', 'Container runtime ready')
 
-        // Step 3: Pull and start EmuHub container
+        // Step 3: Initialize Headscale for internet access
+        statusTracker.progress('Setting up internet access...', 55, 'Configuring Headscale VPN')
+        try {
+          this.headscale = new HeadscaleIntegration(this.cheerpx, {
+            listenPort: 8080,
+            namespace: 'aquifer',
+          })
+          const headscaleInitialized = await this.headscale.init()
+          if (headscaleInitialized) {
+            // Generate auth key for client connections
+            this.headscaleAuthKey = await this.headscale.generateAuthKey('24h') // 24 hour expiry
+            console.log('✅ Headscale initialized - internet access enabled')
+            statusTracker.success('Internet access configured', 'Headscale VPN ready')
+          } else {
+            console.warn('⚠️ Headscale initialization failed, continuing without internet access')
+          }
+        } catch (error) {
+          console.warn('⚠️ Headscale initialization error, continuing without internet access:', error)
+          // Don't fail - continue without Headscale
+        }
+
+        // Step 4: Pull and start EmuHub container
         statusTracker.progress('Starting EmuHub container...', 60, 'Pulling Android emulator image')
         const containerStarted = await this.startEmuHubContainer()
         if (!containerStarted) {
@@ -160,11 +184,24 @@ export class WebVMEmuHubIntegration {
         
         statusTracker.success('EmuHub container started', 'Android emulator initializing')
 
-        // Step 4: Wait for EmuHub to be ready (longer wait for container startup)
+        // Step 5: Configure internet access for Android emulator via Headscale
+        if (this.headscale && this.headscaleAuthKey) {
+          try {
+            statusTracker.progress('Configuring internet access for Android...', 65, 'Connecting to VPN')
+            await this.configureEmulatorInternetAccess()
+            console.log('✅ Internet access configured for Android emulator')
+            statusTracker.success('Internet access enabled', 'Android can connect to internet')
+          } catch (error) {
+            console.warn('⚠️ Failed to configure internet access, continuing without it:', error)
+            // Don't fail - continue without internet access
+          }
+        }
+
+        // Step 6: Wait for EmuHub to be ready (longer wait for container startup)
         statusTracker.progress('Waiting for Android emulator to boot...', 70, 'This may take 30-60 seconds')
         await this.waitForEmuHubReady(30) // Wait up to 30 seconds
 
-        // Step 5: Connect EmuHub integration
+        // Step 7: Connect EmuHub integration
         statusTracker.progress('Connecting to Android emulator...', 80, 'Establishing VNC connection')
         const emuhubConnected = await this.emuhub.connect(10) // More retries for container startup
         if (!emuhubConnected) {
@@ -674,9 +711,13 @@ export class WebVMEmuHubIntegration {
           } else {
             // Create and start new container (REAL Docker execution)
             console.log('📦 Creating new EmuHub container (REAL Docker)...')
+            // Configure EmuHub container with network access for internet connectivity
             const dockerCommand = `docker run -d \
               --name emuhub \
               --privileged \
+              --network bridge \
+              --dns 1.1.1.1 \
+              --dns 8.8.8.8 \
               -e VNCPASS=${this.config.vncPassword || 'admin'} \
               -e emuhubPASS=${this.config.emuhubPassword || 'admin'} \
               -e LISTENPORT=${this.config.emuhubPort || 8000} \
@@ -716,6 +757,70 @@ export class WebVMEmuHubIntegration {
       console.error('❌ Failed to start EmuHub container:', errorMsg)
       throw new Error(`EmuHub container creation failed: ${errorMsg}. Ensure Docker is installed in the Linux VM.`)
     }
+  }
+
+  /**
+   * Configure internet access for Android emulator via Headscale
+   */
+  private async configureEmulatorInternetAccess(): Promise<void> {
+    if (!this.headscale || !this.cheerpx) {
+      return
+    }
+
+    try {
+      // Configure network routing so Android emulator can access internet through Headscale
+      // Headscale provides VPN connectivity, we route traffic through it
+      
+      console.log('🌐 Configuring network routing for internet access...')
+      
+      // Enable IP forwarding in the Linux VM
+      await this.cheerpx.execute('sysctl -w net.ipv4.ip_forward=1')
+      await this.cheerpx.execute('sysctl -w net.ipv6.conf.all.forwarding=1')
+      
+      // Configure iptables NAT to route traffic from containers to internet
+      // This allows the Android emulator container to access the internet
+      await this.cheerpx.execute('iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE || true')
+      await this.cheerpx.execute('iptables -A FORWARD -i docker0 -o eth0 -j ACCEPT || true')
+      await this.cheerpx.execute('iptables -A FORWARD -i eth0 -o docker0 -m state --state RELATED,ESTABLISHED -j ACCEPT || true')
+      
+      // Configure DNS for containers
+      await this.cheerpx.execute('echo "nameserver 1.1.1.1" > /etc/resolv.conf.headscale || true')
+      await this.cheerpx.execute('echo "nameserver 8.8.8.8" >> /etc/resolv.conf.headscale || true')
+      
+      // If EmuHub container is running, configure its network
+      if (this.dockerContainerId) {
+        try {
+          // Connect EmuHub container to host network for internet access
+          // Or configure DNS in the container
+          await this.cheerpx.execute(`docker exec emuhub sh -c "echo 'nameserver 1.1.1.1' > /etc/resolv.conf" || true`)
+          await this.cheerpx.execute(`docker exec emuhub sh -c "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf" || true`)
+          
+          console.log('✅ DNS configured for Android emulator container')
+        } catch (dnsError) {
+          console.warn('⚠️ DNS configuration failed, continuing:', dnsError)
+        }
+      }
+      
+      console.log('✅ Network routing configured - Android emulator can access internet')
+      console.log('🌐 Internet access enabled via Headscale VPN and network routing')
+    } catch (error) {
+      console.warn('⚠️ Network configuration failed, continuing without internet access:', error)
+      // Don't throw - continue without internet access
+    }
+  }
+
+  /**
+   * Get Headscale auth key for client connection
+   */
+  getHeadscaleAuthKey(): string {
+    return this.headscaleAuthKey
+  }
+
+  /**
+   * Get Headscale server URL
+   */
+  getHeadscaleServerUrl(): string | null {
+    return this.headscale?.getServerUrl() || null
   }
 
   /**

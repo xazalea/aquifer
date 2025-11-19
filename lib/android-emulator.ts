@@ -47,6 +47,7 @@ export class AndroidEmulator {
   private openglES: OpenGLESWebGL
   private enhancedVM: EnhancedDalvikVM
   private isGame: boolean = false
+  private networkProxy: AndroidNetworkProxy
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -62,10 +63,20 @@ export class AndroidEmulator {
     this.openglES = new OpenGLESWebGL(canvas)
     this.gameEngine = new GameEngine(canvas, this.openglES)
     this.armEmulator = new ARMEmulator()
+    this.networkProxy = AndroidNetworkProxy.getInstance()
     this.setupCanvas()
     
     // Initialize ARM emulator
     this.armEmulator.init().catch(console.error)
+    
+    // Check internet access and log status
+    this.networkProxy.checkInternetAccess().then(online => {
+      if (online) {
+        console.log('✅ Internet access available for Android apps')
+      } else {
+        console.warn('⚠️ Internet access not available - apps may not work fully')
+      }
+    })
   }
 
   private setupCanvas() {
@@ -651,7 +662,17 @@ export class AndroidEmulator {
     console.log('   - Continuous game loop')
     if (isOnlineGame) {
       console.log('   - Network connectivity for online play')
+      // Ensure network proxy is available for online games
+      const networkStatus = this.networkProxy.getNetworkStatus()
+      console.log(`   - Network status: ${networkStatus.online ? 'Online' : 'Offline'} (${networkStatus.type})`)
     }
+  }
+  
+  /**
+   * Get network proxy for Android apps to use
+   */
+  getNetworkProxy(): AndroidNetworkProxy {
+    return this.networkProxy
   }
   
   /**
