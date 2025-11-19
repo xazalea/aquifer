@@ -83,7 +83,7 @@ export class EnhancedDexParser {
       fieldIds: [],
       methodIds: [],
       classDefs: [],
-      strings: apkInfo.strings || [],
+      strings: [], // Simplified fallback - strings would need to be parsed from DEX files
     };
   }
 
