@@ -44,7 +44,8 @@ export class EnhancedDexParser {
 
     // Fallback to existing parser
     // Convert Uint8Array to ArrayBuffer
-    const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    // Create a new ArrayBuffer to ensure it's not a SharedArrayBuffer
+    const arrayBuffer = new Uint8Array(data).buffer as ArrayBuffer;
     const parser = new APKParser(arrayBuffer);
     const apkInfo = await parser.parse();
     
