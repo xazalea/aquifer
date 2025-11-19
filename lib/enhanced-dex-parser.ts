@@ -43,8 +43,10 @@ export class EnhancedDexParser {
     }
 
     // Fallback to existing parser
-    const parser = new APKParser();
-    const apkInfo = await parser.parseAPK(new Blob([data]));
+    // Convert Uint8Array to ArrayBuffer
+    const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const parser = new APKParser(arrayBuffer);
+    const apkInfo = await parser.parse();
     
     // Convert APKInfo to DexFile format
     // This is a simplified conversion - full implementation would parse DEX properly
