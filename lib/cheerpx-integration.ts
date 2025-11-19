@@ -221,36 +221,64 @@ export class CheerpXIntegration {
             // Docker is required for EmuHub, so we MUST install it
             try {
               console.log('📦 Checking for Docker...')
-              const dockerCheck = await this.execute('which docker || echo "not found"')
+              // Use longer timeout for Docker check
+              const dockerCheck = await this.execute('which docker || echo "not found"', 10000)
               
               if (dockerCheck.includes('not found') || dockerCheck.includes('error')) {
                 console.log('📦 Installing Docker in Linux VM (required for EmuHub)...')
-                statusTracker.info('Installing Docker...', 'Setting up container runtime (this may take 1-2 minutes)')
+                statusTracker.info('Installing Docker...', 'Setting up container runtime (this may take 2-3 minutes)')
                 
-                // Install Docker using the official script
-                const curlResult = await this.execute('curl -fsSL https://get.docker.com -o /tmp/get-docker.sh')
-                if (curlResult.includes('error')) {
-                  throw new Error('Failed to download Docker installation script')
+                // Install Docker using the official script with longer timeout
+                console.log('📥 Downloading Docker installation script...')
+                const curlResult = await this.execute('curl -fsSL https://get.docker.com -o /tmp/get-docker.sh', 60000)
+                if (curlResult.includes('error') && !curlResult.includes('success')) {
+                  throw new Error(`Failed to download Docker installation script: ${curlResult}`)
                 }
+                console.log('✅ Docker installation script downloaded')
                 
-                const installResult = await this.execute('sh /tmp/get-docker.sh')
-                if (installResult.includes('error')) {
-                  throw new Error('Docker installation script failed')
+                console.log('📦 Running Docker installation script (this may take 1-2 minutes)...')
+                // Docker installation can take a while - use 5 minute timeout
+                const installResult = await this.execute('sh /tmp/get-docker.sh', 300000)
+                if (installResult.includes('error') && !installResult.includes('Docker version')) {
+                  // Check if Docker was actually installed despite error message
+                  const verifyCheck = await this.execute('docker --version || echo "not installed"', 10000)
+                  if (verifyCheck.includes('not installed')) {
+                    throw new Error(`Docker installation script failed: ${installResult}`)
+                  }
+                  console.log('⚠️ Installation script reported error, but Docker appears to be installed')
                 }
+                console.log('✅ Docker installation script completed')
                 
                 // Clean up
-                await this.execute('rm -f /tmp/get-docker.sh')
+                await this.execute('rm -f /tmp/get-docker.sh', 10000).catch(() => {
+                  // Ignore cleanup errors
+                })
                 
                 // Add user to docker group (requires new session, but we'll try)
-                await this.execute('usermod -aG docker user || true')
+                await this.execute('usermod -aG docker user || true', 10000).catch(() => {
+                  // Ignore if it fails - Docker might still work
+                })
                 
-                // Verify Docker is installed
-                const verifyResult = await this.execute('docker --version')
-                if (verifyResult.includes('Docker version') || verifyResult.includes('docker')) {
-                  console.log('✅ Docker installed successfully')
-                  statusTracker.success('Docker installed', 'Container runtime ready')
-                } else {
-                  throw new Error('Docker installation verification failed')
+                // Verify Docker is installed - retry up to 3 times
+                let dockerVerified = false
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                  console.log(`🔍 Verifying Docker installation (attempt ${attempt}/3)...`)
+                  const verifyResult = await this.execute('docker --version', 10000)
+                  if (verifyResult.includes('Docker version') || verifyResult.includes('docker')) {
+                    console.log('✅ Docker installed successfully')
+                    statusTracker.success('Docker installed', 'Container runtime ready')
+                    dockerVerified = true
+                    break
+                  } else {
+                    console.warn(`⚠️ Docker verification failed (attempt ${attempt}/3): ${verifyResult}`)
+                    if (attempt < 3) {
+                      await new Promise(resolve => setTimeout(resolve, 2000))
+                    }
+                  }
+                }
+                
+                if (!dockerVerified) {
+                  throw new Error('Docker installation verification failed after 3 attempts')
                 }
               } else {
                 console.log('✅ Docker already available')
@@ -267,18 +295,33 @@ export class CheerpXIntegration {
             
             // Wait for VM to be fully ready and test with a simple command
             console.log('⏳ Verifying VM is ready...')
-            await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second for VM to stabilize
+            await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds for VM to stabilize
             
-            // Test VM with a simple command using full path
-            try {
-              const testResult = await this.testVMReady()
-              if (testResult) {
-                console.log('✅ VM is ready and can execute commands')
-              } else {
-                console.warn('⚠️ VM test command failed, but continuing...')
+            // Test VM with a simple command - retry up to 3 times
+            let vmReady = false
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                console.log(`⏳ Testing VM readiness (attempt ${attempt}/3)...`)
+                const testResult = await this.testVMReady()
+                if (testResult) {
+                  console.log('✅ VM is ready and can execute commands')
+                  vmReady = true
+                  break
+                } else {
+                  console.warn(`⚠️ VM test failed (attempt ${attempt}/3), retrying...`)
+                  await new Promise(resolve => setTimeout(resolve, 1000))
+                }
+              } catch (testError) {
+                const errorMsg = testError instanceof Error ? testError.message : String(testError)
+                console.warn(`⚠️ VM test error (attempt ${attempt}/3):`, errorMsg)
+                if (attempt < 3) {
+                  await new Promise(resolve => setTimeout(resolve, 1000))
+                }
               }
-            } catch (testError) {
-              console.warn('⚠️ VM test command failed, but continuing:', testError)
+            }
+            
+            if (!vmReady) {
+              console.warn('⚠️ VM readiness test failed after 3 attempts, but continuing...')
             }
           }
         } catch (vmError) {
@@ -405,24 +448,42 @@ export class CheerpXIntegration {
     }
     
     try {
+      // Wait a bit for VM to stabilize
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       // Try to run a simple command using /bin/sh (more reliable than bash)
-      const result = await this.linux.run('/bin/sh', ['-c', 'echo test'], {
-        env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-        cwd: '/home/user',
-        uid: 1000,
-        gid: 1000
-      })
-      return result.status === 0
+      // Use echo which is a built-in shell command
+      const result = await Promise.race([
+        this.linux.run('/bin/sh', ['-c', 'echo "test"'], {
+          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+          cwd: '/home/user',
+          uid: 1000,
+          gid: 1000
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('VM test timeout')), 5000)
+        )
+      ]) as any
+      
+      const isReady = result.status === 0
+      if (isReady) {
+        console.log('✅ VM readiness test passed')
+      } else {
+        console.warn('⚠️ VM readiness test returned non-zero status:', result.status)
+      }
+      return isReady
     } catch (error) {
-      console.warn('VM test failed:', error)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.warn('⚠️ VM test failed:', errorMsg)
+      // Don't fail initialization if test fails - VM might still work
       return false
     }
   }
 
   /**
-   * Execute a command in CheerpX Linux VM - CAPTURES OUTPUT PROPERLY
+   * Execute a command in CheerpX Linux VM - SIMPLIFIED AND RELIABLE
    */
-  async execute(command: string): Promise<string> {
+  async execute(command: string, timeout: number = 30000): Promise<string> {
     if (!this.isInitialized || !this.cheerpx) {
       throw new Error('CheerpX not initialized')
     }
@@ -441,22 +502,27 @@ export class CheerpXIntegration {
     
     // Execute command with output redirection via /bin/sh
     // Use -c flag to execute the command string
-    const shArgs = ['-c', `${escapedCommand} > ${outputFile} 2>&1; echo $? > ${statusFile}`]
+    const shCommand = `${escapedCommand} > ${outputFile} 2>&1; echo $? > ${statusFile}`
     
     try {
       // Reset output capture
       this.commandOutput = ''
       
-      // Execute the command using /bin/sh with -c flag
-      const result = await this.linux.run('/bin/sh', shArgs, {
-        env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-        cwd: '/home/user',
-        uid: 1000,
-        gid: 1000
-      })
+      // Execute the command using /bin/sh with -c flag and timeout
+      const result = await Promise.race([
+        this.linux.run('/bin/sh', ['-c', shCommand], {
+          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+          cwd: '/home/user',
+          uid: 1000,
+          gid: 1000
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Command timeout after ${timeout}ms: ${command}`)), timeout)
+        )
+      ]) as any
     
       // Wait a moment for files to be written
-      await new Promise(resolve => setTimeout(resolve, 200))
+      await new Promise(resolve => setTimeout(resolve, 300))
       
       // Read output file using filesystem API
       let output = ''
@@ -468,7 +534,7 @@ export class CheerpXIntegration {
         this.commandOutput = ''
         
         // Read output file using cat (output will be captured via console callback)
-        await this.linux.run('/bin/cat', [outputFile], {
+        await this.linux.run('/bin/sh', ['-c', `cat ${outputFile}`], {
           env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
           cwd: '/home/user',
           uid: 1000,
@@ -476,42 +542,53 @@ export class CheerpXIntegration {
         })
         
         // Wait for output to be captured
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise(resolve => setTimeout(resolve, 400))
         output = this.commandOutput.trim()
         this.commandOutput = ''
         
         // Read status file
         this.commandOutput = ''
-        await this.linux.run('/bin/cat', [statusFile], {
+        await this.linux.run('/bin/sh', ['-c', `cat ${statusFile}`], {
           env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
           cwd: '/home/user',
           uid: 1000,
           gid: 1000
         })
-        await new Promise(resolve => setTimeout(resolve, 200))
+        await new Promise(resolve => setTimeout(resolve, 300))
         const statusStr = this.commandOutput.trim()
         this.commandOutput = ''
         exitCode = parseInt(statusStr, 10) || result.status || 0
       } catch (readError) {
         // If reading fails, use status from result
+        const readErrorMsg = readError instanceof Error ? readError.message : String(readError)
+        console.warn('⚠️ Failed to read command output:', readErrorMsg)
         output = exitCode === 0 ? 'success' : `error: exit code ${exitCode}`
       }
       
-      // Clean up temp files
-      try {
-        await this.linux.run('/bin/rm', ['-f', outputFile, statusFile], {
-          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-          cwd: '/home/user',
-          uid: 1000,
-          gid: 1000
-        })
-      } catch {
+      // Clean up temp files (non-blocking)
+      this.linux.run('/bin/sh', ['-c', `rm -f ${outputFile} ${statusFile}`], {
+        env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh'],
+        cwd: '/home/user',
+        uid: 1000,
+        gid: 1000
+      }).catch(() => {
         // Ignore cleanup errors
+      })
+      
+      const finalOutput = output.trim() || (exitCode === 0 ? 'success' : `error: exit code ${exitCode}`)
+      
+      // Log command execution for debugging
+      if (exitCode !== 0) {
+        console.warn(`⚠️ Command failed (exit ${exitCode}): ${command}`)
+        console.warn(`   Output: ${finalOutput.substring(0, 200)}`)
       }
       
-      return output.trim() || (exitCode === 0 ? 'success' : `error: exit code ${exitCode}`)
+      return finalOutput
     } catch (error) {
-      throw new Error(`Command execution failed: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error(`❌ Command execution failed: ${command}`)
+      console.error(`   Error: ${errorMsg}`)
+      throw new Error(`Command execution failed: ${errorMsg}`)
     }
   }
 

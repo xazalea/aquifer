@@ -616,43 +616,82 @@ export class WebVMEmuHubIntegration {
   private async startEmuHubContainer(): Promise<boolean> {
     try {
       statusTracker.info('Checking for existing EmuHub container...', 'Looking for running containers')
-      console.log('Starting EmuHub container in WebVM...')
+      console.log('🚀 Starting EmuHub container in WebVM...')
 
       // Use CheerpX Docker API if available
       if (this.cheerpx && this.cheerpx.isReady()) {
         try {
-          // Check if container already exists
-          const containers = await this.cheerpx.dockerPs()
-          const existingContainer = containers.find((c: any) => c?.names?.includes('emuhub'))
+          // Check if container already exists with retry
+          let containers: any[] = []
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              console.log(`🔍 Checking for existing containers (attempt ${attempt}/3)...`)
+              containers = await this.cheerpx.dockerPs()
+              break
+            } catch (error) {
+              if (attempt < 3) {
+                console.warn(`⚠️ Failed to list containers (attempt ${attempt}/3), retrying...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+              } else {
+                throw error
+              }
+            }
+          }
+          
+          const existingContainer = containers.find((c: any) => c?.names?.some((name: string) => name.includes('emuhub')))
           
           if (existingContainer && existingContainer.id) {
             // Container exists, start it
             console.log('🔄 Starting existing EmuHub container...')
-            await this.cheerpx.execute(`docker start ${existingContainer.id}`)
-            this.dockerContainerId = existingContainer.id
+            statusTracker.info('Starting existing container...', 'Restarting EmuHub')
+            try {
+              await this.cheerpx.execute(`docker start ${existingContainer.id}`, 30000)
+              this.dockerContainerId = existingContainer.id
+              console.log('✅ Existing EmuHub container started')
+              statusTracker.success('EmuHub container started', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+              return true
+            } catch (startError) {
+              console.warn('⚠️ Failed to start existing container, will create new one:', startError)
+              // Continue to create new container
+            }
+          }
+          
+          // Create and start new container using CheerpX
+          console.log('📦 Creating new EmuHub container in CheerpX...')
+          statusTracker.progress('Pulling EmuHub Docker image...', 65, 'Downloading Android emulator (this may take 1-2 minutes)')
+          
+          // Build Docker run command with proper escaping
+          const dockerCommand = `docker run -d --name emuhub --privileged --network bridge --dns 1.1.1.1 --dns 8.8.8.8 -e VNCPASS=${this.config.vncPassword || 'admin'} -e emuhubPASS=${this.config.emuhubPassword || 'admin'} -e LISTENPORT=${this.config.emuhubPort || 8000} -p ${this.config.emuhubPort || 8000}:${this.config.emuhubPort || 8000}/tcp ${this.config.emuhubImage || 'mohamedhelmy/emuhub:latest'}`
+          
+          console.log('⏳ Running Docker command to create container...')
+          const containerIdResult = await this.cheerpx.execute(dockerCommand, 300000) // 5 minute timeout for image pull
+          
+          // Extract container ID from output
+          const containerId = containerIdResult.trim().split('\n')[0].trim()
+          if (containerId && containerId.length >= 12) {
+            this.dockerContainerId = containerId
+            statusTracker.success('EmuHub container created', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+            console.log('✅ EmuHub container created:', this.dockerContainerId)
+            return true
           } else {
-            // Create and start new container using CheerpX
-            console.log('📦 Creating new EmuHub container in CheerpX...')
-                statusTracker.progress('Pulling EmuHub Docker image...', 65, 'Downloading Android emulator (this may take 1-2 minutes)')
-                const containerId = await this.cheerpx.dockerRun(this.config.emuhubImage || 'mohamedhelmy/emuhub:latest', {
-                  name: 'emuhub',
-                  privileged: true,
-                  env: {
-                    VNCPASS: this.config.vncPassword || 'admin',
-                    emuhubPASS: this.config.emuhubPassword || 'admin',
-                    LISTENPORT: (this.config.emuhubPort || 8000).toString(),
-                  },
-                  ports: {
-                    [`${this.config.emuhubPort || 8000}/tcp`]: this.config.emuhubPort || 8000,
-                  },
-                })
-                this.dockerContainerId = containerId.trim()
-                statusTracker.success('EmuHub container created', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
-                console.log('✅ EmuHub container created:', this.dockerContainerId)
+            // Try to find container by name
+            console.log('🔍 Container ID not found in output, searching by name...')
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            const containersAfter = await this.cheerpx.dockerPs()
+            const foundContainer = containersAfter.find((c: any) => c?.names?.some((name: string) => name.includes('emuhub')))
+            if (foundContainer && foundContainer.id) {
+              this.dockerContainerId = foundContainer.id
+              statusTracker.success('EmuHub container found', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+              console.log('✅ EmuHub container found:', this.dockerContainerId)
+              return true
+            } else {
+              throw new Error(`Failed to create or find EmuHub container. Output: ${containerIdResult}`)
+            }
           }
         } catch (error) {
-          console.error('❌ CheerpX Docker API failed:', error)
-          throw new Error(`Failed to create EmuHub container via CheerpX: ${error instanceof Error ? error.message : String(error)}`)
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          console.error('❌ CheerpX Docker API failed:', errorMsg)
+          throw new Error(`Failed to create EmuHub container via CheerpX: ${errorMsg}`)
         }
       }
       // Use WebVM's Docker API if available
