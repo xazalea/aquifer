@@ -1,0 +1,8 @@
+# Ignore WASM source files in Vercel build
+# WASM files should be pre-built and committed to public/wasm/
+lib/wasm/*.cpp
+lib/wasm/Makefile
+lib/go-wasm/*.go
+lib/go-wasm/go.mod
+lib/haskell/*.hs
+

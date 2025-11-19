@@ -1,6 +1,7 @@
 'use client'
 
-import { Smartphone, Sparkles } from 'lucide-react'
+import Image from 'next/image'
+import { Sparkles } from 'lucide-react'
 import { AnimatedGradientText } from '@/components/ui/animated-gradient-text'
 import { OrbitingCircles } from '@/components/ui/orbiting-circles'
 import { DotPattern } from '@/components/ui/dot-pattern'
@@ -22,9 +23,15 @@ export function EnhancedHeader() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="p-3 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-xl shadow-lg relative overflow-hidden">
-                <Smartphone className="w-6 h-6 text-white relative z-10" />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+              <div className="p-2 bg-background/80 backdrop-blur-sm rounded-xl shadow-lg border border-border/40 relative overflow-hidden">
+                <Image
+                  src="/icon.png"
+                  alt="Aquifer Logo"
+                  width={32}
+                  height={32}
+                  className="rounded-lg object-contain"
+                  priority
+                />
               </div>
               <OrbitingCircles
                 className="absolute -inset-4"

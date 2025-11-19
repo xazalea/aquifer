@@ -48,10 +48,23 @@ export class GoWASMBridge {
 
   private async _doInit(): Promise<void> {
     try {
-      // Load Go WASM support
-      await import('/wasm/wasm_exec.js');
+      // Go WASM can only be loaded in the browser
+      if (typeof window === 'undefined') {
+        throw new Error('Go WASM module can only be loaded in browser');
+      }
 
-      // Load Go WASM module
+      // Load Go WASM support via script tag (can't use import for public files)
+      const wasmExecScript = document.createElement('script');
+      wasmExecScript.src = '/wasm/wasm_exec.js';
+      wasmExecScript.async = true;
+      
+      await new Promise<void>((resolve, reject) => {
+        wasmExecScript.onload = () => resolve();
+        wasmExecScript.onerror = () => reject(new Error('Failed to load wasm_exec.js'));
+        document.head.appendChild(wasmExecScript);
+      });
+
+      // Load Go WASM module - use public path
       const wasmModule = await fetch('/wasm/vm-orchestrator.wasm');
       const wasmBytes = await wasmModule.arrayBuffer();
 
@@ -69,10 +82,11 @@ export class GoWASMBridge {
         throw new Error('createVMOrchestrator not found in Go module');
       }
     } catch (error) {
-      console.error('[Go WASM] Failed to initialize VM orchestrator:', error);
+      // Don't throw - Go orchestrator is optional
+      console.warn('[Go WASM] Failed to initialize VM orchestrator (optional component):', error);
       this.initialized = false;
       this.orchestrator = null;
-      throw error;
+      // Don't throw - allow graceful fallback
     }
   }
 

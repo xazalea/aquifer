@@ -59,16 +59,42 @@ export class WASMEmulatorBridge {
 
   private async _doInit(): Promise<void> {
     try {
-      // Dynamic import of WASM module
-      const createModule = await import('/wasm/emulator.js');
-      const moduleFactory = createModule.default || createModule.createWASMEmulator;
-      
-      if (!moduleFactory) {
-        throw new Error('WASM module factory not found');
+      // WASM modules can only be loaded in the browser
+      if (typeof window === 'undefined') {
+        throw new Error('WASM module can only be loaded in browser');
       }
 
-      // Initialize module
-      this.module = await moduleFactory() as WASMEmulatorModule;
+      // Load JavaScript loader dynamically at runtime
+      // Use a script tag approach for Emscripten-generated modules
+      const script = document.createElement('script');
+      script.src = '/wasm/emulator.js';
+      script.async = true;
+      
+      await new Promise<void>((resolve, reject) => {
+        script.onload = () => {
+          // Emscripten modules expose themselves globally
+          const moduleFactory = (window as any).createWASMEmulator;
+          if (!moduleFactory) {
+            reject(new Error('WASM module factory not found'));
+            return;
+          }
+          
+          // Initialize module with WASM file path
+          moduleFactory({
+            locateFile: (path: string) => {
+              if (path.endsWith('.wasm')) {
+                return '/wasm/emulator.wasm';
+              }
+              return path;
+            }
+          }).then((module: WASMEmulatorModule) => {
+            this.module = module;
+            resolve();
+          }).catch(reject);
+        };
+        script.onerror = () => reject(new Error('Failed to load WASM module script'));
+        document.head.appendChild(script);
+      });
       
       if (!this.module) {
         throw new Error('Failed to create WASM module');
@@ -90,11 +116,12 @@ export class WASMEmulatorBridge {
       this.initialized = true;
       console.log('[WASM] ARM Emulator initialized successfully');
     } catch (error) {
-      console.error('[WASM] Failed to initialize ARM emulator:', error);
+      // Don't throw - allow graceful fallback to other emulators
+      console.warn('[WASM] Failed to initialize ARM emulator (will use fallback):', error);
       this.initialized = false;
       this.emulatorPtr = null;
       this.module = null;
-      throw error;
+      // Don't throw - let the caller handle fallback
     }
   }
 

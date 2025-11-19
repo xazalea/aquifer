@@ -18,7 +18,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.logo {
+  border-radius: 8px;
+  object-fit: contain;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .title {

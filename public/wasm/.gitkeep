@@ -1,0 +1,8 @@
+# This directory should contain built WASM files:
+# - emulator.js (C++ WASM loader)
+# - emulator.wasm (C++ WASM binary)
+# - vm-orchestrator.wasm (Go WASM binary)
+# - wasm_exec.js (Go WASM runtime)
+#
+# Build with: npm run build:all
+
