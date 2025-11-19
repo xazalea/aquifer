@@ -18,7 +18,7 @@ interface AndroidVMProps {
   emulationMode?: EmulationMode
 }
 
-export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange, emulationMode = 'auto' }: AndroidVMProps) {
+export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingChange, emulationMode = 'webvm-emuhub' }: AndroidVMProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const installedApkRef = useRef<string | null>(null) // Track installed APK to prevent re-installation
@@ -91,19 +91,19 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     }
   }, [emulationMode, vm, vmState, setVmState])
 
-  // Initialize browser VM for browser mode or auto mode
+  // Initialize browser VM ONLY if explicitly in browser mode (not auto)
   useEffect(() => {
-    if ((emulationMode === 'browser' || emulationMode === 'auto') && canvasRef.current) {
+    if (emulationMode === 'browser' && canvasRef.current) {
       // Clean up WebVM+EmuHub if switching to browser mode
-      if (hybridEmulatorRef.current && emulationMode === 'browser') {
+      if (hybridEmulatorRef.current) {
         hybridEmulatorRef.current.stop().catch(console.error)
         hybridEmulatorRef.current = null
         setVncUrl(null)
       }
       
-      // Initialize browser VM with the correct mode
+      // Initialize browser VM only when explicitly requested
       if (!vm) {
-        initVM(canvasRef.current, emulationMode)
+        initVM(canvasRef.current, 'browser')
       }
     }
   }, [vm, initVM, emulationMode])

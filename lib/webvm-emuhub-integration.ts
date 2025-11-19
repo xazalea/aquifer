@@ -648,7 +648,11 @@ export class WebVMEmuHubIntegration {
               await this.cheerpx.execute(`docker start ${existingContainer.id}`, 30000)
               this.dockerContainerId = existingContainer.id
               console.log('✅ Existing EmuHub container started')
-              statusTracker.success('EmuHub container started', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+              if (this.dockerContainerId) {
+                statusTracker.success('EmuHub container started', `Container ID: ${this.dockerContainerId.substring(0, 12)}...`)
+              } else {
+                statusTracker.success('EmuHub container started', 'Container running')
+              }
               return true
             } catch (startError) {
               console.warn('⚠️ Failed to start existing container, will create new one:', startError)

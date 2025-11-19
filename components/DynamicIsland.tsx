@@ -161,6 +161,26 @@ export function DynamicIsland({
               </div>
             )}
             
+            {/* Browser Mode Fallback Button - Only show if not in browser mode */}
+            {emulationMode !== 'browser' && (
+              <div className="mb-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400 mb-2">
+                  Using Docker/WebVM mode. Switch to browser mode if needed.
+                </p>
+                <Button
+                  onClick={() => {
+                    onEmulationModeChange('browser')
+                    setIsExpanded(false)
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  Switch to Browser Mode
+                </Button>
+              </div>
+            )}
+            
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'controls' | 'store')} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-3" style={{ marginBottom: '12px' }}>
                 <TabsTrigger value="controls">Controls</TabsTrigger>

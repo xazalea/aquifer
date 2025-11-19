@@ -14,9 +14,9 @@ export function useAndroidVM() {
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
-  const [emulationMode, setEmulationMode] = useState<EmulationMode>('auto')
+  const [emulationMode, setEmulationMode] = useState<EmulationMode>('webvm-emuhub')
 
-  const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'auto') => {
+  const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'webvm-emuhub') => {
     try {
       setError(null)
       setIsReady(false)
@@ -30,42 +30,33 @@ export function useAndroidVM() {
         }
       }
       
-      const emulator = new HybridEmulator(canvas, { mode }) // Use HybridEmulator with config
-      
-      // DOCKER FIRST - try Docker/WebVM first if mode is 'auto'
-      if (mode === 'auto') {
-        try {
-          // Try Docker/WebVM first
-          const dockerEmulator = new HybridEmulator(canvas, { mode: 'webvm-emuhub' })
-          const initialized = await dockerEmulator.init()
-          
-          if (initialized) {
-            console.log('✅ Docker/WebVM initialized successfully')
-            setVm({ canvas, emulator: dockerEmulator })
-            setEmulationMode('webvm-emuhub')
-            setTimeout(() => setIsReady(true), 500)
-            return
-          }
-        } catch (dockerError) {
-          // Docker failed - show error but allow manual fallback
-          const errorMsg = dockerError instanceof Error ? dockerError.message : String(dockerError)
-          console.warn('⚠️ Docker/WebVM initialization failed, you can manually switch to browser mode:', errorMsg)
-          setError(`Docker/WebVM failed: ${errorMsg}. You can manually switch to browser mode.`)
-          // Don't throw - let user manually choose browser mode
+      // Only initialize browser mode if explicitly requested
+      if (mode === 'browser') {
+        const browserEmulator = new HybridEmulator(canvas, { mode: 'browser' })
+        const initialized = await browserEmulator.init()
+        if (!initialized) {
+          throw new Error('Failed to initialize browser emulator')
         }
+        setVm({ canvas, emulator: browserEmulator })
+        setEmulationMode('browser')
+        setTimeout(() => {
+          setIsReady(true)
+        }, 500)
+        return
       }
       
-      // If Docker failed or mode is 'browser', use browser mode
-      const initialized = await emulator.init()
+      // For 'auto' or 'webvm-emuhub', always use Docker/WebVM
+      const dockerMode = mode === 'auto' ? 'webvm-emuhub' : mode
+      const dockerEmulator = new HybridEmulator(canvas, { mode: dockerMode })
+      const initialized = await dockerEmulator.init()
       
       if (!initialized) {
-        throw new Error('Failed to initialize emulator')
+        throw new Error('Failed to initialize Docker/WebVM emulator')
       }
       
-      setVm({ canvas, emulator })
-      setEmulationMode(mode === 'auto' ? 'browser' : mode)
+      setVm({ canvas, emulator: dockerEmulator })
+      setEmulationMode('webvm-emuhub')
       
-      // Simulate initialization delay (reduced for faster startup)
       setTimeout(() => {
         setIsReady(true)
       }, 500)
