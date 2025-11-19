@@ -108,7 +108,11 @@ export function DynamicIsland({
       data-dynamic-island-content
     >
       {/* Collapsed State - Compact Controls */}
-      <div className={styles.collapsedContent}>
+      <div 
+        className={styles.collapsedContent}
+        onClick={!isExpanded ? toggleExpanded : undefined}
+        style={{ cursor: !isExpanded ? 'pointer' : 'default' }}
+      >
         <div className={styles.statusIndicator}>
           <div className={`${styles.statusDot} ${styles[`status${vmState.charAt(0).toUpperCase() + vmState.slice(1)}`]}`} />
           <span className={styles.statusText}>
@@ -117,7 +121,10 @@ export function DynamicIsland({
         </div>
         <button
           className={styles.expandButton}
-          onClick={toggleExpanded}
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleExpanded()
+          }}
           aria-label={isExpanded ? 'Collapse' : 'Expand'}
         >
           {isExpanded ? <ChevronDown className={styles.icon} /> : <ChevronUp className={styles.icon} />}
