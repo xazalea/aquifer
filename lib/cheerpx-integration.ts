@@ -231,22 +231,29 @@ export class CheerpXIntegration {
             // Try alternative disk image URL
             console.log('⚠️ Primary disk image failed, trying alternative...')
             try {
+              // Re-destructure CheerpX classes for alternative attempt
+              const { Linux: AltLinux, HttpBytesDevice: AltHttpBytesDevice, IDBDevice: AltIDBDevice, OverlayDevice: AltOverlayDevice, WebDevice: AltWebDevice, DataDevice: AltDataDevice } = this.cheerpx
+              
+              if (!AltLinux || !AltHttpBytesDevice) {
+                throw new Error('CheerpX classes not available for alternative disk image')
+              }
+              
               const altDiskImageUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
-              const altBlockDevice = await HttpBytesDevice.create(altDiskImageUrl)
-              const altBlockCache = await IDBDevice.create('aquifer-vm-cache-alt')
-              const altOverlayDevice = await OverlayDevice.create(altBlockDevice, altBlockCache)
+              const altBlockDevice = await AltHttpBytesDevice.create(altDiskImageUrl)
+              const altBlockCache = await AltIDBDevice.create('aquifer-vm-cache-alt')
+              const altOverlayDevice = await AltOverlayDevice.create(altBlockDevice, altBlockCache)
               
               const altMountPoints = [
                 { type: 'ext2', dev: altOverlayDevice, path: '/' },
-                { type: 'dir', dev: await WebDevice.create(''), path: '/web' },
-                { type: 'dir', dev: await DataDevice.create(), path: '/data' },
+                { type: 'dir', dev: await AltWebDevice.create(''), path: '/web' },
+                { type: 'dir', dev: await AltDataDevice.create(), path: '/data' },
                 { type: 'devs', path: '/dev' },
                 { type: 'devpts', path: '/dev/pts' },
                 { type: 'proc', path: '/proc' },
                 { type: 'sys', path: '/sys' },
               ]
               
-              this.linux = await Linux.create({ mounts: altMountPoints })
+              this.linux = await AltLinux.create({ mounts: altMountPoints })
               console.log('✅ Linux VM created with alternative disk image')
             } catch (altError) {
               throw new Error(`Failed to create Linux VM with both primary and alternative disk images: ${errorMsg}`)
