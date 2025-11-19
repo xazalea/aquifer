@@ -98,7 +98,7 @@ export class EnhancedAndroidEmulator extends AndroidEmulator {
     const installedApp: InstalledApp = {
       packageName: apkInfo.packageName,
       versionName: apkInfo.versionName,
-      label: apkInfo.label || apkInfo.packageName,
+      label: apkInfo.applicationLabel || apkInfo.packageName,
       apkInfo,
     };
 
