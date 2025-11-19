@@ -97,28 +97,56 @@ export class CheerpXIntegration {
             statusTracker.info('Loading Debian disk image...', 'Downloading Linux filesystem')
             console.log('📦 Loading Debian disk image from WebVM...')
             
-            // Create block device from WebVM's disk image
+            // Create block device from WebVM's disk image with timeout
             let blockDevice
             try {
-              blockDevice = await CloudDevice.create(diskImageUrl)
+              console.log('⏳ Attempting to load disk image via CloudDevice (WebSocket)...')
+              // Add timeout for disk image loading (60 seconds)
+              blockDevice = await Promise.race([
+                CloudDevice.create(diskImageUrl),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Disk image load timeout (60s)')), 60000)
+                )
+              ]) as any
               statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-              console.log('✅ Disk image loaded')
+              console.log('✅ Disk image loaded via CloudDevice')
             } catch (cloudError) {
               // Fallback to HTTP if WebSocket fails
-              console.log('⚠️ Cloud device failed, trying HTTP...')
-              const httpUrl = diskImageUrl.replace('wss://', 'https://').replace('ws://', 'http://')
-              blockDevice = await HttpBytesDevice.create(httpUrl)
-              console.log('✅ Disk image loaded via HTTP')
+              const errorMsg = cloudError instanceof Error ? cloudError.message : String(cloudError)
+              console.log(`⚠️ Cloud device failed (${errorMsg}), trying HTTP...`)
+              statusTracker.info('Trying HTTP fallback...', 'Loading disk image via HTTP')
+              
+              try {
+                const httpUrl = diskImageUrl.replace('wss://', 'https://').replace('ws://', 'http://')
+                console.log('⏳ Attempting to load disk image via HttpBytesDevice (HTTP)...')
+                // Add timeout for HTTP loading (90 seconds - larger file)
+                blockDevice = await Promise.race([
+                  HttpBytesDevice.create(httpUrl),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('HTTP disk image load timeout (90s)')), 90000)
+                  )
+                ]) as any
+                statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                console.log('✅ Disk image loaded via HTTP')
+              } catch (httpError) {
+                const httpErrorMsg = httpError instanceof Error ? httpError.message : String(httpError)
+                console.error('❌ Both CloudDevice and HttpBytesDevice failed:', httpErrorMsg)
+                throw new Error(`Failed to load disk image: ${httpErrorMsg}`)
+              }
             }
             
             // Create cache for overlay (allows writes)
+            console.log('⏳ Creating overlay cache...')
             const blockCache = await IDBDevice.create('aquifer-vm-cache')
+            console.log('⏳ Creating overlay device...')
             const overlayDevice = await OverlayDevice.create(blockDevice, blockCache)
             
             // Create additional devices
+            console.log('⏳ Creating additional devices...')
             const webDevice = await WebDevice.create('')
             const documentsDevice = await WebDevice.create('documents')
             const dataDevice = await DataDevice.create()
+            console.log('✅ All devices created')
             
             // Mount points (same as WebVM)
             const mountPoints = [
@@ -140,30 +168,51 @@ export class CheerpXIntegration {
               { type: 'dir', dev: documentsDevice, path: '/home/user/documents' }
             ]
             
-            // Create Linux VM with proper mounts
-            this.linux = await Linux.create({ mounts: mountPoints })
-            
-            // Set up console output capture for commands
-            // We'll use a custom console writer that captures output
-            const consoleWriter = (data: string) => {
-              if (this.commandResolve && data) {
-                this.commandOutput += data
+            // Create Linux VM with proper mounts (with timeout)
+            console.log('⏳ Creating Linux VM instance...')
+            statusTracker.info('Creating Linux VM...', 'Initializing virtualization')
+            try {
+              this.linux = await Promise.race([
+                Linux.create({ mounts: mountPoints }),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('VM creation timeout (30s)')), 30000)
+                )
+              ]) as any
+              
+              // Set up console output capture for commands
+              // We'll use a custom console writer that captures output
+              const consoleWriter = (data: string) => {
+                if (this.commandResolve && data) {
+                  this.commandOutput += data
+                }
               }
+              
+              // Register callbacks for stdout/stderr (CheerpX API)
+              if (this.linux.registerCallback) {
+                try {
+                  this.linux.registerCallback('stdout', consoleWriter)
+                  this.linux.registerCallback('stderr', consoleWriter)
+                } catch (callbackError) {
+                  console.warn('⚠️ Failed to register callbacks (non-critical):', callbackError)
+                }
+              }
+              
+              // Also set up custom console if available (for interactive mode)
+              if (this.linux.setCustomConsole) {
+                try {
+                  this.linux.setCustomConsole(consoleWriter, 80, 24) // 80 cols, 24 rows
+                } catch (consoleError) {
+                  console.warn('⚠️ Failed to set custom console (non-critical):', consoleError)
+                }
+              }
+              
+              statusTracker.success('CheerpX Linux VM created', 'Virtualization environment ready')
+              console.log('✅ CheerpX Linux VM created with Debian filesystem')
+            } catch (vmCreateError) {
+              const vmErrorMsg = vmCreateError instanceof Error ? vmCreateError.message : String(vmCreateError)
+              console.error('❌ Failed to create Linux VM:', vmErrorMsg)
+              throw new Error(`Linux VM creation failed: ${vmErrorMsg}`)
             }
-            
-            // Register callbacks for stdout/stderr (CheerpX API)
-            if (this.linux.registerCallback) {
-              this.linux.registerCallback('stdout', consoleWriter)
-              this.linux.registerCallback('stderr', consoleWriter)
-            }
-            
-            // Also set up custom console if available (for interactive mode)
-            if (this.linux.setCustomConsole) {
-              this.linux.setCustomConsole(consoleWriter, 80, 24) // 80 cols, 24 rows
-            }
-            
-            statusTracker.success('CheerpX Linux VM created', 'Virtualization environment ready')
-            console.log('✅ CheerpX Linux VM created with Debian filesystem')
             
             // Wait for VM to be fully ready
             await new Promise(resolve => setTimeout(resolve, 1000))
