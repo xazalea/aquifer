@@ -39,7 +39,22 @@ export class CheerpXIntegration {
 
       // Try to import CheerpX from npm package (preferred method)
       try {
+        // Suppress WASM loading errors from CheerpX CDN
+        const originalError = console.error
+        const wasmErrorHandler = (...args: any[]) => {
+          const message = args.join(' ')
+          // Ignore fail.wasm download errors - these are non-critical
+          if (message.includes('fail.wasm') || message.includes('@fail')) {
+            return // Silently ignore
+          }
+          originalError.apply(console, args)
+        }
+        console.error = wasmErrorHandler
+        
         const CheerpXModule = await import('@leaningtech/cheerpx')
+        // Restore original error handler
+        console.error = originalError
+        
         // CheerpX exports named exports: Linux, DataDevice, etc.
         this.cheerpx = CheerpXModule
         console.log('✅ CheerpX loaded from npm package (@leaningtech/cheerpx)')
@@ -93,46 +108,109 @@ export class CheerpXIntegration {
             
             // Use WebVM's Debian disk image (same as WebVM uses)
             // This is a real ext2 filesystem with Linux installed
-            const diskImageUrl = 'wss://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+            // Try HTTPS first as it's more reliable than WebSocket
+            const diskImageUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
             statusTracker.info('Loading Debian disk image...', 'Downloading Linux filesystem')
             console.log('📦 Loading Debian disk image from WebVM...')
             
-            // Create block device from WebVM's disk image with timeout
+            // Create block device from WebVM's disk image
+            // Use HttpBytesDevice for HTTPS URLs (more reliable than WebSocket)
             let blockDevice
-            try {
-              console.log('⏳ Attempting to load disk image via CloudDevice (WebSocket)...')
-              // Add timeout for disk image loading (60 seconds)
-              blockDevice = await Promise.race([
-                CloudDevice.create(diskImageUrl),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Disk image load timeout (60s)')), 60000)
-                )
-              ]) as any
-              statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-              console.log('✅ Disk image loaded via CloudDevice')
-            } catch (cloudError) {
-              // Fallback to HTTP if WebSocket fails
-              const errorMsg = cloudError instanceof Error ? cloudError.message : String(cloudError)
-              console.log(`⚠️ Cloud device failed (${errorMsg}), trying HTTP...`)
-              statusTracker.info('Trying HTTP fallback...', 'Loading disk image via HTTP')
-              
-              try {
-                const httpUrl = diskImageUrl.replace('wss://', 'https://').replace('ws://', 'http://')
-                console.log('⏳ Attempting to load disk image via HttpBytesDevice (HTTP)...')
-                // Add timeout for HTTP loading (90 seconds - larger file)
-                blockDevice = await Promise.race([
-                  HttpBytesDevice.create(httpUrl),
-                  new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('HTTP disk image load timeout (90s)')), 90000)
-                  )
-                ]) as any
-                statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-                console.log('✅ Disk image loaded via HTTP')
-              } catch (httpError) {
-                const httpErrorMsg = httpError instanceof Error ? httpError.message : String(httpError)
-                console.error('❌ Both CloudDevice and HttpBytesDevice failed:', httpErrorMsg)
-                throw new Error(`Failed to load disk image: ${httpErrorMsg}`)
+            let lastError: Error | null = null
+            
+            // Try HttpBytesDevice first (more reliable for HTTPS)
+            if (diskImageUrl.startsWith('https://') || diskImageUrl.startsWith('http://')) {
+              for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                  console.log(`⏳ Attempting to load disk image via HttpBytesDevice (HTTP) - attempt ${attempt}/3...`)
+                  statusTracker.progress(`Loading disk image (attempt ${attempt}/3)...`, 15 + (attempt * 5), 'Downloading Linux filesystem')
+                  
+                  // Add timeout for HTTP loading (120 seconds - large file)
+                  blockDevice = await Promise.race([
+                    HttpBytesDevice.create(diskImageUrl),
+                    new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('HTTP disk image load timeout (120s)')), 120000)
+                    )
+                  ]) as any
+                  
+                  // Verify the device was created successfully
+                  if (!blockDevice) {
+                    throw new Error('HTTP block device creation returned null')
+                  }
+                  
+                  statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                  console.log('✅ Disk image loaded via HttpBytesDevice')
+                  break // Success, exit retry loop
+                } catch (httpError) {
+                  lastError = httpError instanceof Error ? httpError : new Error(String(httpError))
+                  const errorMsg = lastError.message
+                  console.warn(`⚠️ HttpBytesDevice attempt ${attempt}/3 failed: ${errorMsg}`)
+                  
+                  if (attempt < 3) {
+                    // Wait before retry (exponential backoff)
+                    const waitTime = attempt * 3000 // 3s, 6s
+                    console.log(`⏳ Waiting ${waitTime}ms before retry...`)
+                    await new Promise(resolve => setTimeout(resolve, waitTime))
+                  }
+                }
               }
+            } else {
+              // Try CloudDevice for WebSocket URLs
+              for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                  console.log(`⏳ Attempting to load disk image via CloudDevice (WebSocket) - attempt ${attempt}/2...`)
+                  // Add timeout for disk image loading (90 seconds)
+                  blockDevice = await Promise.race([
+                    CloudDevice.create(diskImageUrl),
+                    new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Disk image load timeout (90s)')), 90000)
+                    )
+                  ]) as any
+                  
+                  // Verify the device was created successfully
+                  if (!blockDevice) {
+                    throw new Error('Block device creation returned null')
+                  }
+                  
+                  statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                  console.log('✅ Disk image loaded via CloudDevice')
+                  break // Success, exit retry loop
+                } catch (cloudError) {
+                  lastError = cloudError instanceof Error ? cloudError : new Error(String(cloudError))
+                  const errorMsg = lastError.message
+                  console.warn(`⚠️ Cloud device attempt ${attempt}/2 failed: ${errorMsg}`)
+                  
+                  // If WebSocket fails, try HTTPS fallback
+                  if (diskImageUrl.startsWith('wss://')) {
+                    const httpsUrl = diskImageUrl.replace('wss://', 'https://')
+                    console.log('⚠️ WebSocket failed, trying HTTPS fallback...')
+                    try {
+                      blockDevice = await HttpBytesDevice.create(httpsUrl)
+                      if (blockDevice) {
+                        statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                        console.log('✅ Disk image loaded via HTTPS fallback')
+                        break
+                      }
+                    } catch (httpsError) {
+                      console.warn('⚠️ HTTPS fallback also failed:', httpsError)
+                    }
+                  }
+                  
+                  if (attempt < 2) {
+                    // Wait before retry
+                    const waitTime = 3000
+                    console.log(`⏳ Waiting ${waitTime}ms before retry...`)
+                    await new Promise(resolve => setTimeout(resolve, waitTime))
+                  }
+                }
+              }
+            }
+            
+            // If all attempts failed, throw error
+            if (!blockDevice) {
+              const finalError = lastError || new Error('Unknown error')
+              console.error('❌ Failed to load disk image after all retries:', finalError.message)
+              throw new Error(`Failed to load disk image after all retries: ${finalError.message}`)
             }
             
             // Create cache for overlay (allows writes)
@@ -168,16 +246,59 @@ export class CheerpXIntegration {
               { type: 'dir', dev: documentsDevice, path: '/home/user/documents' }
             ]
             
-            // Create Linux VM with proper mounts (with timeout)
+            // Create Linux VM with proper mounts (with increased timeout and retry)
             console.log('⏳ Creating Linux VM instance...')
             statusTracker.info('Creating Linux VM...', 'Initializing virtualization')
+            
+            let vmCreated = false
+            let vmError: Error | null = null
+            
+            // Retry VM creation up to 2 times with increased timeout
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              try {
+                console.log(`⏳ Creating Linux VM (attempt ${attempt}/2)...`)
+                // Increased timeout to 60 seconds - VM creation can take time
+                this.linux = await Promise.race([
+                  Linux.create({ mounts: mountPoints }),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error(`VM creation timeout (60s) - attempt ${attempt}`)), 60000)
+                  )
+                ]) as any
+                
+                // Verify VM was created
+                if (!this.linux) {
+                  throw new Error('Linux VM creation returned null')
+                }
+                
+                vmCreated = true
+                break // Success, exit retry loop
+              } catch (createError) {
+                vmError = createError instanceof Error ? createError : new Error(String(createError))
+                const errorMsg = vmError.message
+                console.warn(`⚠️ VM creation attempt ${attempt}/2 failed: ${errorMsg}`)
+                
+                // Check if it's a disk image error
+                if (errorMsg.includes('Invalid disk image') || errorMsg.includes('Could not mount') || errorMsg.includes('WebAssembly.compile')) {
+                  console.error('❌ Disk image appears to be corrupted or invalid')
+                  // Don't retry if disk image is invalid - it won't work on retry
+                  throw new Error(`Invalid disk image: ${errorMsg}. The disk image may be corrupted or incomplete.`)
+                }
+                
+                if (attempt < 2) {
+                  // Wait before retry
+                  console.log('⏳ Waiting 3s before VM creation retry...')
+                  await new Promise(resolve => setTimeout(resolve, 3000))
+                }
+              }
+            }
+            
+            if (!vmCreated) {
+              const finalError = vmError || new Error('Unknown error')
+              console.error('❌ Linux VM creation failed after all retries:', finalError.message)
+              throw new Error(`Linux VM creation failed: ${finalError.message}`)
+            }
+            
             try {
-              this.linux = await Promise.race([
-                Linux.create({ mounts: mountPoints }),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('VM creation timeout (30s)')), 30000)
-                )
-              ]) as any
               
               // Set up console output capture for commands
               // We'll use a custom console writer that captures output
