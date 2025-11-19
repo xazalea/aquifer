@@ -272,7 +272,9 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
                       const event = new CustomEvent('switch-emulation-mode', { detail: 'browser' })
                       window.dispatchEvent(event)
                       setVmState('stopped')
-                      setError(null)
+                      if (onError) {
+                        onError(null) // Clear error when switching modes
+                      }
                     }}
                   >
                     Switch to Browser Mode
