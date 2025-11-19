@@ -215,6 +215,22 @@ export class CheerpXIntegration {
             }
             
             console.log('✅ Linux VM is ready with Docker support')
+            
+            // Wait for VM to be fully ready and test with a simple command
+            console.log('⏳ Verifying VM is ready...')
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second for VM to stabilize
+            
+            // Test VM with a simple command using full path
+            try {
+              const testResult = await this.testVMReady()
+              if (testResult) {
+                console.log('✅ VM is ready and can execute commands')
+              } else {
+                console.warn('⚠️ VM test command failed, but continuing...')
+              }
+            } catch (testError) {
+              console.warn('⚠️ VM test command failed, but continuing:', testError)
+            }
           }
         } catch (vmError) {
           const errorMsg = vmError instanceof Error ? vmError.message : String(vmError)
@@ -255,6 +271,15 @@ export class CheerpXIntegration {
               
               this.linux = await AltLinux.create({ mounts: altMountPoints })
               console.log('✅ Linux VM created with alternative disk image')
+              
+              // Wait and test VM
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              try {
+                await this.testVMReady()
+                console.log('✅ VM is ready and can execute commands')
+              } catch (testError) {
+                console.warn('⚠️ VM test command failed, but continuing:', testError)
+              }
             } catch (altError) {
               throw new Error(`Failed to create Linux VM with both primary and alternative disk images: ${errorMsg}`)
             }
@@ -323,6 +348,29 @@ export class CheerpXIntegration {
   }
 
   /**
+   * Test if VM is ready by running a simple command
+   */
+  private async testVMReady(): Promise<boolean> {
+    if (!this.linux) {
+      return false
+    }
+    
+    try {
+      // Try to run a simple command using /bin/sh (more reliable than bash)
+      const result = await this.linux.run('/bin/sh', ['-c', 'echo test'], {
+        env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+        cwd: '/home/user',
+        uid: 1000,
+        gid: 1000
+      })
+      return result.status === 0
+    } catch (error) {
+      console.warn('VM test failed:', error)
+      return false
+    }
+  }
+
+  /**
    * Execute a command in CheerpX Linux VM - CAPTURES OUTPUT PROPERLY
    */
   async execute(command: string): Promise<string> {
@@ -339,22 +387,24 @@ export class CheerpXIntegration {
     const outputFile = `/tmp/cmd_output_${Date.now()}_${Math.random().toString(36).substring(7)}.txt`
     const statusFile = `/tmp/cmd_status_${Date.now()}_${Math.random().toString(36).substring(7)}.txt`
     
-    // Execute command with output redirection via bash
-    const bashCommand = `bash -c '${command.replace(/'/g, "'\\''")} > ${outputFile} 2>&1; echo $? > ${statusFile}'`
+    // Escape single quotes in command for shell
+    const escapedCommand = command.replace(/'/g, "'\\''")
     
-    // Parse bash command
-    const parts = bashCommand.trim().split(/\s+/)
-    const cmd = parts[0]
-    const args = parts.slice(1)
+    // Execute command with output redirection via /bin/sh
+    // Use -c flag to execute the command string
+    const shArgs = ['-c', `${escapedCommand} > ${outputFile} 2>&1; echo $? > ${statusFile}`]
     
     try {
-      // Execute the command
-    const result = await this.linux.run(cmd, args, {
-      env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/bash', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-      cwd: '/home/user',
-      uid: 1000,
-      gid: 1000
-    })
+      // Reset output capture
+      this.commandOutput = ''
+      
+      // Execute the command using /bin/sh with -c flag
+      const result = await this.linux.run('/bin/sh', shArgs, {
+        env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
+        cwd: '/home/user',
+        uid: 1000,
+        gid: 1000
+      })
     
       // Wait a moment for files to be written
       await new Promise(resolve => setTimeout(resolve, 200))
@@ -369,8 +419,8 @@ export class CheerpXIntegration {
         this.commandOutput = ''
         
         // Read output file using cat (output will be captured via console callback)
-        await this.linux.run('cat', [outputFile], {
-          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/bash'],
+        await this.linux.run('/bin/cat', [outputFile], {
+          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
           cwd: '/home/user',
           uid: 1000,
           gid: 1000
@@ -383,8 +433,8 @@ export class CheerpXIntegration {
         
         // Read status file
         this.commandOutput = ''
-        await this.linux.run('cat', [statusFile], {
-          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/bash'],
+        await this.linux.run('/bin/cat', [statusFile], {
+          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
           cwd: '/home/user',
           uid: 1000,
           gid: 1000
@@ -400,8 +450,8 @@ export class CheerpXIntegration {
       
       // Clean up temp files
       try {
-        await this.linux.run('rm', ['-f', outputFile, statusFile], {
-          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/bash'],
+        await this.linux.run('/bin/rm', ['-f', outputFile, statusFile], {
+          env: ['HOME=/home/user', 'TERM=xterm', 'USER=user', 'SHELL=/bin/sh', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
           cwd: '/home/user',
           uid: 1000,
           gid: 1000
