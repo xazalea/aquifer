@@ -67,31 +67,36 @@ export function PWAInstaller() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-4 max-w-sm">
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
-          <h3 className="font-semibold text-sm mb-1">Install Aquifer</h3>
-          <p className="text-xs text-muted-foreground mb-3">
-            Install Aquifer as a Progressive Web App for a better experience
-          </p>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleInstallClick}
-              size="sm"
-              className="flex-1"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Install
-            </Button>
-            <Button
-              onClick={() => setShowBanner(false)}
-              variant="ghost"
-              size="sm"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+    <div 
+      className="fixed bottom-2 right-2 z-40 opacity-70 hover:opacity-100 transition-opacity duration-300"
+      style={{
+        background: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '12px',
+        padding: '8px 12px',
+        maxWidth: '200px',
+        fontSize: '12px',
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleInstallClick}
+          className="flex items-center gap-1.5 text-white/90 hover:text-white transition-colors text-xs font-medium"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Install</span>
+        </button>
+        <button
+          onClick={() => setShowBanner(false)}
+          className="text-white/60 hover:text-white/90 transition-colors p-0.5"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+          aria-label="Dismiss"
+        >
+          <X className="w-3 h-3" />
+        </button>
       </div>
     </div>
   )

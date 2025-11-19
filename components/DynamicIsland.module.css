@@ -1,9 +1,9 @@
 .dynamicIsland {
-  position: fixed;
-  top: 20px;
+  position: fixed !important;
+  top: 80px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: 10000 !important;
   background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(15, 15, 25, 0.98) 100%);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -16,6 +16,9 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @keyframes slideDown {
@@ -310,7 +313,7 @@
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .dynamicIsland {
-    top: 12px;
+    top: 72px;
   }
 
   .dynamicIsland.expanded {
