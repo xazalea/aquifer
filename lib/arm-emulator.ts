@@ -16,13 +16,14 @@ import { ARMJSFallback } from './arm-js-fallback'
 type EmulatorType = 'wasm' | 'unicorn' | 'armjs' | 'none'
 
 export class ARMEmulator {
-  private wasmBridge: WASMEmulatorBridge | null = null
+  private wasmBridge: WASMEmulatorBridge
   private unicorn: UnicornIntegration
   private armjs: ARMJSFallback
   private isInitialized: boolean = false
   private emulatorType: EmulatorType = 'none'
 
   constructor() {
+    // getWASMEmulator always returns a singleton instance, never null
     this.wasmBridge = getWASMEmulator()
     this.unicorn = new UnicornIntegration()
     this.armjs = new ARMJSFallback()
