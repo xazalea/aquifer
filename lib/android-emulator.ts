@@ -17,6 +17,7 @@ import { AndroidViewSystem } from './android-view-system'
 import { GameEngine } from './game-engine'
 import { ARMEmulator } from './arm-emulator'
 import { OpenGLESWebGL } from './opengl-es-webgl'
+import { AndroidNetworkProxy } from './android-network-proxy'
 
 export interface InstalledApp {
   packageName: string
