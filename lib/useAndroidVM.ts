@@ -14,9 +14,9 @@ export function useAndroidVM() {
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
-  const [emulationMode, setEmulationMode] = useState<EmulationMode>('webvm-emuhub')
+  const [emulationMode, setEmulationMode] = useState<EmulationMode>('auto')
 
-  const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'webvm-emuhub') => {
+  const initVM = useCallback(async (canvas: HTMLCanvasElement, mode: EmulationMode = 'auto') => {
     try {
       setError(null)
       setIsReady(false)

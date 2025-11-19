@@ -91,11 +91,11 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
     }
   }, [emulationMode, vm, vmState, setVmState])
 
-  // Initialize browser VM for browser mode
+  // Initialize browser VM for browser mode or auto mode
   useEffect(() => {
-    if (emulationMode === 'browser' && canvasRef.current) {
+    if ((emulationMode === 'browser' || emulationMode === 'auto') && canvasRef.current) {
       // Clean up WebVM+EmuHub if switching to browser mode
-      if (hybridEmulatorRef.current) {
+      if (hybridEmulatorRef.current && emulationMode === 'browser') {
         hybridEmulatorRef.current.stop().catch(console.error)
         hybridEmulatorRef.current = null
         setVncUrl(null)
@@ -103,7 +103,7 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
       
       // Initialize browser VM with the correct mode
       if (!vm) {
-        initVM(canvasRef.current, 'browser')
+        initVM(canvasRef.current, emulationMode)
       }
     }
   }, [vm, initVM, emulationMode])
@@ -251,7 +251,6 @@ export function AndroidVM({ vmState, setVmState, apkFile, onError, onInstallingC
           <div className={styles.placeholder}>
             <div className={styles.placeholderContent}>
               <div className={styles.loader}></div>
-              <p className={styles.placeholderText}>Initializing Android VM...</p>
             </div>
           </div>
         )}

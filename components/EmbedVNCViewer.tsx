@@ -53,7 +53,6 @@ export function EmbedVNCViewer({ vncUrl, canvas }: EmbedVNCViewerProps) {
     <div className={styles.container}>
       <div className={styles.connecting}>
         <div className={styles.spinner} />
-        <div className={styles.connectingText}>Initializing Android...</div>
       </div>
     </div>
   )

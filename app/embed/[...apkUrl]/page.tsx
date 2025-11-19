@@ -196,10 +196,7 @@ export default function EmbedPage() {
               style={{ width: `${loadingProgress}%` }}
             />
             <div className={styles.loadingText}>
-              {loadingProgress < 30 && 'Initializing emulator...'}
-              {loadingProgress >= 30 && loadingProgress < 70 && 'Loading Android...'}
-              {loadingProgress >= 70 && loadingProgress < 90 && 'Downloading APK...'}
-              {loadingProgress >= 90 && 'Installing app...'}
+              {/* Status is shown in StatusDisplay below */}
             </div>
           </div>
           

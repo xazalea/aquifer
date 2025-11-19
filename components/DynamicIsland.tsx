@@ -114,14 +114,6 @@ export function DynamicIsland({
           <span className={styles.statusText}>
             {currentStatus?.message || (vmState === 'running' ? 'Running' : vmState === 'starting' ? 'Starting...' : 'Stopped')}
           </span>
-          {currentStatus?.progress !== undefined && (
-            <div className={styles.miniProgress}>
-              <div 
-                className={styles.miniProgressBar}
-                style={{ width: `${currentStatus.progress}%` }}
-              />
-            </div>
-          )}
         </div>
         <button
           className={styles.expandButton}
@@ -130,6 +122,14 @@ export function DynamicIsland({
         >
           {isExpanded ? <ChevronDown className={styles.icon} /> : <ChevronUp className={styles.icon} />}
         </button>
+        {currentStatus?.progress !== undefined && (
+          <div className={styles.miniProgress}>
+            <div 
+              className={styles.miniProgressBar}
+              style={{ width: `${currentStatus.progress}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Expanded State - Full Controls */}
@@ -155,11 +155,11 @@ export function DynamicIsland({
             )}
             
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'controls' | 'store')} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-2 mb-3" style={{ marginBottom: '12px' }}>
                 <TabsTrigger value="controls">Controls</TabsTrigger>
                 <TabsTrigger value="store">App Store</TabsTrigger>
               </TabsList>
-              <TabsContent value="controls" className="mt-0">
+              <TabsContent value="controls" className="mt-0" style={{ marginTop: 0 }}>
                 <ControlPanel
                   vmState={vmState}
                   setVmState={setVmState}
@@ -175,7 +175,7 @@ export function DynamicIsland({
                   onEmulationModeChange={onEmulationModeChange}
                 />
               </TabsContent>
-              <TabsContent value="store" className="mt-0">
+              <TabsContent value="store" className="mt-0" style={{ marginTop: 0 }}>
                 <AppStore
                   onInstallAPK={onInstallFromStore}
                   isInstalling={isInstalling}

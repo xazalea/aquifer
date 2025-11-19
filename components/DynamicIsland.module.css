@@ -18,6 +18,7 @@
   width: 200px;
   height: 50px;
   padding: 0 16px;
+  position: relative;
 }
 
 .dynamicIsland.expanded {
@@ -34,15 +35,17 @@
   height: 100%;
   width: 100%;
   gap: 12px;
+  padding: 0;
 }
 
 .statusIndicator {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .statusDot {
@@ -68,22 +71,24 @@
 }
 
 .statusText {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.95) !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
   flex: 1;
+  min-width: 0;
 }
 
 .miniProgress {
-  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   height: 2px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 1px;
-  margin-top: 4px;
+  border-radius: 0 0 999px 999px;
   overflow: hidden;
 }
 
@@ -95,9 +100,9 @@
 }
 
 .statusSection {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .expandButton,
@@ -141,8 +146,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .expandedTitle {
@@ -155,7 +161,7 @@
 .expandedBody {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px 20px;
   background: rgba(10, 10, 10, 0.98);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;

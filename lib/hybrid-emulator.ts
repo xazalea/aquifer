@@ -70,40 +70,32 @@ export class HybridEmulator {
 
       switch (this.mode) {
         case 'webvm-emuhub': {
-          // Try optimized Android VM first (fastest method)
-          console.log('⚡ Trying optimized Android VM (fastest method)...')
+          // Try WebVM/EmuHub, but fallback to browser if it fails quickly
+          console.log('⚡ Trying WebVM + EmuHub...')
           try {
-            this.optimizedAndroid = new OptimizedAndroidVM({
-              androidVersion: '9', // Fastest version
-              memorySize: 1536, // 1.5GB for speed
-              enableAcceleration: true,
-              enableGraphics: true,
-            })
+            const result = await Promise.race([
+              this.initWebVMEmuHub(),
+              new Promise<boolean>((resolve) => 
+                setTimeout(() => {
+                  console.warn('⚠️ WebVM/EmuHub initialization timeout, falling back to browser mode')
+                  resolve(false)
+                }, 10000) // 10 second timeout
+              )
+            ])
             
-            const androidReady = await this.optimizedAndroid.init()
-            if (androidReady) {
-              console.log('✅ Using optimized Android VM (fastest)')
-              const started = await this.optimizedAndroid.start()
-              if (started) {
-                // Optimized Android VM is running
-                // We'll use VNC to display it (via NoVNC or similar)
-                console.log('✅ Optimized Android VM started successfully!')
-                console.log('💡 VNC URL:', this.optimizedAndroid.getVNCUrl())
-                return true
-              }
+            if (result) {
+              return true
             }
+            
+            // Fallback to browser mode
+            console.log('📱 Falling back to browser-based emulation (always works)')
+            this.mode = 'browser'
+            return await this.initBrowser()
           } catch (error) {
-            console.warn('⚠️ Optimized Android VM failed, trying EmuHub...', error)
-          }
-          
-          // Fallback to EmuHub
-          const originalMode = this.mode
-          const result = await this.initWebVMEmuHub()
-          // If initWebVMEmuHub switched to browser mode, use that
-          if (this.mode !== originalMode && this.mode === 'browser') {
+            console.warn('⚠️ WebVM/EmuHub failed, falling back to browser mode:', error)
+            this.mode = 'browser'
             return await this.initBrowser()
           }
-          return result
         }
             case 'browser':
             default:
@@ -132,16 +124,10 @@ export class HybridEmulator {
   private async detectBestMode(): Promise<EmulationMode> {
     console.log('🔍 Detecting best emulation mode...')
     
-    // Try WebVM + EmuHub combined (best option)
-    console.log('📦 Trying WebVM + EmuHub...')
-    const webvmEmuhubAvailable = await this.webvmEmuhub.init()
-    if (webvmEmuhubAvailable) {
-      console.log('✅ WebVM + EmuHub is available')
-      return 'webvm-emuhub'
-    }
-
-    console.log('⚠️ WebVM + EmuHub not available, using browser emulation')
-    // Fall back to browser (always available)
+    // Browser mode is always available and works reliably
+    // WebVM/EmuHub is experimental and often fails
+    // Default to browser for reliability
+    console.log('📱 Using browser-based emulation (reliable and always works)')
     return 'browser'
   }
 
@@ -296,13 +282,91 @@ export class HybridEmulator {
       case 'browser':
         if (this.browserEmulator) {
           await this.browserEmulator.installAPK(apkData, fileName)
+        } else {
+          throw new Error('Browser emulator not initialized')
         }
         break
       case 'webvm-emuhub':
         if (this.currentEmulator) {
           await this.webvmEmuhub.installAPK(this.currentEmulator.id, apkData, fileName)
+        } else {
+          throw new Error('EmuHub emulator not initialized')
         }
         break
+    }
+  }
+
+  /**
+   * Launch app by package name
+   */
+  launchApp(packageName: string): void {
+    switch (this.mode) {
+      case 'browser':
+        if (this.browserEmulator) {
+          this.browserEmulator.launchApp(packageName)
+        }
+        break
+      case 'webvm-emuhub':
+        // For EmuHub, apps are launched via ADB commands
+        // Note: launchApp method may not be implemented in webvmEmuhub
+        console.log('Launching app in EmuHub mode:', packageName)
+        // Apps are launched automatically after installation in EmuHub
+        break
+    }
+  }
+
+  /**
+   * Uninstall app by package name
+   */
+  uninstallApp(packageName: string): void {
+    switch (this.mode) {
+      case 'browser':
+        if (this.browserEmulator) {
+          this.browserEmulator.uninstallApp(packageName)
+        }
+        break
+      case 'webvm-emuhub':
+        // For EmuHub, uninstall via ADB
+        console.log('Uninstalling app in EmuHub mode:', packageName)
+        // Uninstall functionality would need to be implemented in webvmEmuhub
+        break
+    }
+  }
+
+  /**
+   * Get installed apps
+   */
+  getInstalledApps(): any[] {
+    switch (this.mode) {
+      case 'browser':
+        if (this.browserEmulator) {
+          return this.browserEmulator.getInstalledApps()
+        }
+        return []
+      case 'webvm-emuhub':
+        // For EmuHub, we'd need to query the emulator
+        // For now, return empty array
+        return []
+      default:
+        return []
+    }
+  }
+
+  /**
+   * Get running app
+   */
+  getRunningApp(): any | null {
+    switch (this.mode) {
+      case 'browser':
+        if (this.browserEmulator) {
+          return this.browserEmulator.getRunningApp()
+        }
+        return null
+      case 'webvm-emuhub':
+        // For EmuHub, we'd need to query the emulator
+        return null
+      default:
+        return null
     }
   }
 

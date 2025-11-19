@@ -52,8 +52,6 @@ export function EmuHubVNCViewer({ vncUrl, width, height, className }: EmuHubVNCV
         <div className={styles.placeholder}>
           <div className={styles.loading}>
             <div className={styles.spinner}></div>
-            <p>Initializing Android emulator...</p>
-            <p className={styles.hint}>This may take a minute on first launch</p>
           </div>
         </div>
       </div>
@@ -76,7 +74,6 @@ export function EmuHubVNCViewer({ vncUrl, width, height, className }: EmuHubVNCV
       {isLoading && (
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
-          <p>Connecting to Android emulator...</p>
         </div>
       )}
       <iframe
