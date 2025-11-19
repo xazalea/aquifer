@@ -102,8 +102,8 @@ export class EnhancedAndroidEmulator extends AndroidEmulator {
       apkInfo,
     };
 
-    // Install using parent class
-    await this.installAPK(apkFile);
+    // Install using parent class (expects ArrayBuffer, not File)
+    await this.installAPK(arrayBuffer, apkFile.name);
 
     console.log('[Enhanced Emulator] APK installed successfully');
     console.log(`  - Package: ${installedApp.packageName}`);
