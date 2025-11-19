@@ -4,6 +4,7 @@ import { AndroidVM } from '@/components/AndroidVM'
 import { Header } from '@/components/Header'
 import { DynamicIsland } from '@/components/DynamicIsland'
 import { PWAInstaller } from '@/components/PWAInstaller'
+import { NavigationSidebar } from '@/components/NavigationSidebar'
 import { useState, useEffect } from 'react'
 import { useAndroidVM } from '@/lib/useAndroidVM'
 import { appStorage } from '@/lib/app-storage'
@@ -25,6 +26,7 @@ export default function Home() {
     setEmulationMode: setHookEmulationMode
   } = useAndroidVM()
   const [emulationMode, setEmulationMode] = useState<'browser' | 'webvm-emuhub' | 'auto'>('webvm-emuhub')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   
   // Sync emulation mode with hook
   useEffect(() => {
@@ -71,10 +73,31 @@ export default function Home() {
     }
   }
 
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    if (!sidebarOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (target.closest('[data-sidebar]') || target.closest('[data-menu-button]')) {
+        return
+      }
+      if (window.innerWidth <= 768) {
+        setSidebarOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [sidebarOpen])
+
   return (
     <main className={`${styles.main} relative`}>
-      <Header />
-      <div className={styles.fullscreenContainer}>
+      <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+      <div data-sidebar className={`${styles.sidebarWrapper} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
+        {sidebarOpen && <NavigationSidebar onClose={() => setSidebarOpen(false)} />}
+      </div>
+      <div className={`${styles.fullscreenContainer} ${sidebarOpen ? styles.withSidebar : ''}`}>
         <AndroidVM 
           vmState={vmState}
           setVmState={setVmState}

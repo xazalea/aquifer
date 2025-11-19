@@ -2,8 +2,20 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #000;
+  background: linear-gradient(135deg, #0a0a0f 0%, #0f0f19 100%);
   position: relative;
+}
+
+.sidebarWrapper {
+  position: fixed;
+  left: 0;
+  top: 60px;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.sidebarWrapper:not(.sidebarOpen) {
+  display: none;
 }
 
 .fullscreenContainer {
@@ -14,6 +26,14 @@
   align-items: center;
   justify-content: center;
   background: #000;
+  transition: margin-left 0.3s ease-in-out;
+  margin-top: 60px;
+  height: calc(100vh - 60px);
+}
+
+.fullscreenContainer.withSidebar {
+  margin-left: 280px;
+  width: calc(100% - 280px);
 }
 
 /* Remove old styles */
@@ -27,4 +47,12 @@
 
 .panelContainer {
   display: none;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .fullscreenContainer.withSidebar {
+    margin-left: 0;
+    width: 100%;
+  }
 }

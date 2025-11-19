@@ -1,12 +1,29 @@
 'use client'
 
 import Image from 'next/image'
+import { Menu } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import styles from './Header.module.css'
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   return (
     <header className={styles.header}>
-      <div className={styles.headerContent}>
+      <div className={styles.headerLeft}>
+        {onMenuClick && (
+          <Button
+            onClick={onMenuClick}
+            variant="ghost"
+            size="icon"
+            className={styles.menuButton}
+            aria-label="Toggle navigation"
+          >
+            <Menu className={styles.menuIcon} />
+          </Button>
+        )}
         <div className={styles.logoContainer}>
           <Image
             src="/icon.png"
@@ -17,8 +34,10 @@ export function Header() {
             priority
           />
         </div>
-        <h1 className={styles.title}>Aquifer</h1>
-        <p className={styles.subtitle}>Android VM in Browser</p>
+        <div className={styles.headerContent}>
+          <h1 className={styles.title}>Aquifer</h1>
+          <p className={styles.subtitle}>Android VM in Browser</p>
+        </div>
       </div>
     </header>
   )
