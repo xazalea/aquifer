@@ -30,6 +30,13 @@ export class AndroidEmulator {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private isRunning: boolean = false
+
+  /**
+   * Check if the emulator is currently running
+   */
+  public getIsRunning(): boolean {
+    return this.isRunning
+  }
   private animationFrameId: number | null = null
   private bootProgress: number = 0
   private installedApps: Map<string, InstalledApp> = new Map()

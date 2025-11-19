@@ -296,7 +296,7 @@ export class HybridEmulator {
           console.log('🎮 Launching app in browser mode for REAL PLAY:', packageName)
           this.browserEmulator.launchApp(packageName)
           // Ensure app is running and rendering continuously
-          if (!this.browserEmulator.isRunning) {
+          if (!this.browserEmulator.getIsRunning()) {
             await this.browserEmulator.start()
           }
           console.log('✅ App is RUNNING and PLAYABLE in browser mode')
