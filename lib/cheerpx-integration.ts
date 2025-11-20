@@ -108,100 +108,75 @@ export class CheerpXIntegration {
             
             // Use WebVM's Debian disk image (same as WebVM uses)
             // This is a real ext2 filesystem with Linux installed
-            // Try HTTPS first as it's more reliable than WebSocket
-            const diskImageUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+            // Use WebSocket (CloudDevice) first to avoid CORS issues
+            const diskImageUrl = 'wss://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+            const httpsDiskImageUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
             statusTracker.info('Loading Debian disk image...', 'Downloading Linux filesystem')
             console.log('📦 Loading Debian disk image from WebVM...')
             
             // Create block device from WebVM's disk image
-            // Use HttpBytesDevice for HTTPS URLs (more reliable than WebSocket)
+            // Use CloudDevice (WebSocket) first to avoid CORS issues
             let blockDevice
             let lastError: Error | null = null
             
-            // Try HttpBytesDevice first (more reliable for HTTPS)
-            if (diskImageUrl.startsWith('https://') || diskImageUrl.startsWith('http://')) {
-              for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                  console.log(`⏳ Attempting to load disk image via HttpBytesDevice (HTTP) - attempt ${attempt}/3...`)
-                  statusTracker.progress(`Loading disk image (attempt ${attempt}/3)...`, 15 + (attempt * 5), 'Downloading Linux filesystem')
-                  
-                  // Add timeout for HTTP loading (120 seconds - large file)
-                  blockDevice = await Promise.race([
-                    HttpBytesDevice.create(diskImageUrl),
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('HTTP disk image load timeout (120s)')), 120000)
-                    )
-                  ]) as any
-                  
-                  // Verify the device was created successfully
-                  if (!blockDevice) {
-                    throw new Error('HTTP block device creation returned null')
-                  }
-                  
-                  statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-                  console.log('✅ Disk image loaded via HttpBytesDevice')
-                  break // Success, exit retry loop
-                } catch (httpError) {
-                  lastError = httpError instanceof Error ? httpError : new Error(String(httpError))
-                  const errorMsg = lastError.message
-                  console.warn(`⚠️ HttpBytesDevice attempt ${attempt}/3 failed: ${errorMsg}`)
-                  
-                  if (attempt < 3) {
-                    // Wait before retry (exponential backoff)
-                    const waitTime = attempt * 3000 // 3s, 6s
-                    console.log(`⏳ Waiting ${waitTime}ms before retry...`)
-                    await new Promise(resolve => setTimeout(resolve, waitTime))
-                  }
+            // Try CloudDevice first (WebSocket, no CORS issues)
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                console.log(`⏳ Attempting to load disk image via CloudDevice (WebSocket) - attempt ${attempt}/3...`)
+                statusTracker.progress(`Loading disk image (attempt ${attempt}/3)...`, 15 + (attempt * 5), 'Downloading Linux filesystem')
+                
+                // Add timeout for disk image loading (120 seconds - large file)
+                blockDevice = await Promise.race([
+                  CloudDevice.create(diskImageUrl),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('WebSocket disk image load timeout (120s)')), 120000)
+                  )
+                ]) as any
+                
+                // Verify the device was created successfully
+                if (!blockDevice) {
+                  throw new Error('CloudDevice creation returned null')
                 }
-              }
-            } else {
-              // Try CloudDevice for WebSocket URLs
-              for (let attempt = 1; attempt <= 2; attempt++) {
-                try {
-                  console.log(`⏳ Attempting to load disk image via CloudDevice (WebSocket) - attempt ${attempt}/2...`)
-                  // Add timeout for disk image loading (90 seconds)
-                  blockDevice = await Promise.race([
-                    CloudDevice.create(diskImageUrl),
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Disk image load timeout (90s)')), 90000)
-                    )
-                  ]) as any
-                  
-                  // Verify the device was created successfully
-                  if (!blockDevice) {
-                    throw new Error('Block device creation returned null')
-                  }
-                  
-                  statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-                  console.log('✅ Disk image loaded via CloudDevice')
-                  break // Success, exit retry loop
-                } catch (cloudError) {
-                  lastError = cloudError instanceof Error ? cloudError : new Error(String(cloudError))
-                  const errorMsg = lastError.message
-                  console.warn(`⚠️ Cloud device attempt ${attempt}/2 failed: ${errorMsg}`)
-                  
-                  // If WebSocket fails, try HTTPS fallback
-                  if (diskImageUrl.startsWith('wss://')) {
-                    const httpsUrl = diskImageUrl.replace('wss://', 'https://')
-                    console.log('⚠️ WebSocket failed, trying HTTPS fallback...')
-                    try {
-                      blockDevice = await HttpBytesDevice.create(httpsUrl)
-                      if (blockDevice) {
-                        statusTracker.success('Disk image loaded', 'Linux filesystem ready')
-                        console.log('✅ Disk image loaded via HTTPS fallback')
-                        break
-                      }
-                    } catch (httpsError) {
-                      console.warn('⚠️ HTTPS fallback also failed:', httpsError)
+                
+                statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                console.log('✅ Disk image loaded via CloudDevice (WebSocket)')
+                break // Success, exit retry loop
+              } catch (cloudError) {
+                lastError = cloudError instanceof Error ? cloudError : new Error(String(cloudError))
+                const errorMsg = lastError.message
+                console.warn(`⚠️ CloudDevice attempt ${attempt}/3 failed: ${errorMsg}`)
+                
+                // If WebSocket fails and this is the last attempt, try HTTPS fallback
+                if (attempt === 3) {
+                  console.log('⚠️ WebSocket failed, trying HTTPS fallback...')
+                  try {
+                    blockDevice = await Promise.race([
+                      HttpBytesDevice.create(httpsDiskImageUrl),
+                      new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('HTTPS disk image load timeout (120s)')), 120000)
+                      )
+                    ]) as any
+                    if (blockDevice) {
+                      statusTracker.success('Disk image loaded', 'Linux filesystem ready')
+                      console.log('✅ Disk image loaded via HTTPS fallback')
+                      break
+                    }
+                  } catch (httpsError) {
+                    const httpsErrorMsg = httpsError instanceof Error ? httpsError.message : String(httpsError)
+                    console.warn('⚠️ HTTPS fallback also failed:', httpsErrorMsg)
+                    // Check if it's a CORS error
+                    if (httpsErrorMsg.includes('CORS') || httpsErrorMsg.includes('Access-Control-Allow-Origin')) {
+                      console.error('❌ CORS error: The disk image server does not allow cross-origin requests.')
+                      console.log('💡 Tip: CloudDevice (WebSocket) should be used instead to avoid CORS issues.')
                     }
                   }
-                  
-                  if (attempt < 2) {
-                    // Wait before retry
-                    const waitTime = 3000
-                    console.log(`⏳ Waiting ${waitTime}ms before retry...`)
-                    await new Promise(resolve => setTimeout(resolve, waitTime))
-                  }
+                }
+                
+                if (attempt < 3) {
+                  // Wait before retry (exponential backoff)
+                  const waitTime = attempt * 2000 // 2s, 4s
+                  console.log(`⏳ Waiting ${waitTime}ms before retry...`)
+                  await new Promise(resolve => setTimeout(resolve, waitTime))
                 }
               }
             }
@@ -461,14 +436,56 @@ export class CheerpXIntegration {
             console.log('⚠️ Primary disk image failed, trying alternative...')
             try {
               // Re-destructure CheerpX classes for alternative attempt
-              const { Linux: AltLinux, HttpBytesDevice: AltHttpBytesDevice, IDBDevice: AltIDBDevice, OverlayDevice: AltOverlayDevice, WebDevice: AltWebDevice, DataDevice: AltDataDevice } = this.cheerpx
+              const { Linux: AltLinux, HttpBytesDevice: AltHttpBytesDevice, CloudDevice: AltCloudDevice, IDBDevice: AltIDBDevice, OverlayDevice: AltOverlayDevice, WebDevice: AltWebDevice, DataDevice: AltDataDevice } = this.cheerpx
               
               if (!AltLinux || !AltHttpBytesDevice) {
                 throw new Error('CheerpX classes not available for alternative disk image')
               }
               
-              const altDiskImageUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
-              const altBlockDevice = await AltHttpBytesDevice.create(altDiskImageUrl)
+              // Try WebSocket first (no CORS), then HTTPS fallback
+              const altDiskImageUrl = 'wss://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+              const altHttpsUrl = 'https://disks.webvm.io/debian_large_20230522_5044875331.ext2'
+              
+              let altBlockDevice
+              if (AltCloudDevice) {
+                try {
+                  // Try CloudDevice first (WebSocket, no CORS)
+                  console.log('⏳ Trying alternative disk image via CloudDevice (WebSocket)...')
+                  altBlockDevice = await Promise.race([
+                    AltCloudDevice.create(altDiskImageUrl),
+                    new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Alternative WebSocket disk image load timeout (120s)')), 120000)
+                    )
+                  ]) as any
+                  console.log('✅ Alternative disk image loaded via CloudDevice')
+                } catch (wsError) {
+                  console.warn('⚠️ Alternative WebSocket disk image failed, trying HTTPS...')
+                  // Fallback to HTTPS (may have CORS issues, but worth trying)
+                  try {
+                    altBlockDevice = await Promise.race([
+                      AltHttpBytesDevice.create(altHttpsUrl),
+                      new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Alternative HTTPS disk image load timeout (120s)')), 120000)
+                      )
+                    ]) as any
+                    console.log('✅ Alternative disk image loaded via HTTPS')
+                  } catch (httpsError) {
+                    const httpsErrorMsg = httpsError instanceof Error ? httpsError.message : String(httpsError)
+                    console.warn('⚠️ Alternative HTTPS disk image also failed:', httpsErrorMsg)
+                    throw new Error(`Alternative disk image loading failed: ${httpsErrorMsg}`)
+                  }
+                }
+              } else {
+                // CloudDevice not available, try HTTPS directly
+                console.log('⏳ CloudDevice not available, trying alternative disk image via HTTPS...')
+                altBlockDevice = await Promise.race([
+                  AltHttpBytesDevice.create(altHttpsUrl),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Alternative HTTPS disk image load timeout (120s)')), 120000)
+                  )
+                ]) as any
+                console.log('✅ Alternative disk image loaded via HTTPS')
+              }
               const altBlockCache = await AltIDBDevice.create('aquifer-vm-cache-alt')
               const altOverlayDevice = await AltOverlayDevice.create(altBlockDevice, altBlockCache)
               
